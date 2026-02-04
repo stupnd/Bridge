@@ -1,0 +1,86 @@
+.sensor-display {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.sensor-label {
+  font-size: 1.5rem;
+  color: #333;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.sensor-value {
+  font-size: 5rem;
+  font-weight: bold;
+  margin: 1rem 0;
+  transition: color 0.3s ease;
+}
+
+.sensor-info {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.sensor-range {
+  font-weight: 500;
+}
+
+.sensor-percentage {
+  font-weight: 600;
+  color: #333;
+}
+
+.status-indicator {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  background-color: #4caf50;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.inactive {
+  background-color: #999;
+  animation: none;
+}
+
+.status-indicator:has(.inactive) {
+  color: #999;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 768px) {
+  .sensor-value {
+    font-size: 3.5rem;
+  }
+  
+  .sensor-label {
+    font-size: 1.2rem;
+  }
+}
