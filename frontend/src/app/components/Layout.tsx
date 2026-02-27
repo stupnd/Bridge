@@ -6,6 +6,7 @@ export default function Layout() {
   const navItems = [
     { path: "/app", label: "Dashboard", icon: Home, end: true },
     { path: "/app/learn", label: "Learn", icon: BookOpen, end: false },
+    { path: "/app/sensor", label: "Sensor", icon: Hand, end: false },
     { path: "/app/profile", label: "Account", icon: User, end: false },
   ];
 

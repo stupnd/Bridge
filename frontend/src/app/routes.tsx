@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Learn from "./pages/Learn";
+import Sensor from "./pages/Sensor";
 import Profile from "./pages/Profile";
 import Layout from "./components/Layout";
 
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "learn", Component: Learn },
+      { path: "sensor", Component: Sensor },
       { path: "profile", Component: Profile },
     ],
   },
