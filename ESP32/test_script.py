@@ -1,5 +1,6 @@
 import asyncio
 from bleak import BleakScanner, BleakClient
+import struct
 
 # Searches for device called DEVICE_NAME
 # Subscribes to that device's service with UUID SERVICE_UUID
@@ -11,8 +12,12 @@ SERVICE_UUID = "3104838b-5ed7-4e6c-ac03-7823dd9d4c7b"
 # This function gets called whenever this device is notified of a change in the data
 # (the change comes from the Arduino)
 def sampleServiceHandler(char, data):
-    # Data is received as a byte array! Important to know the format for when we have actual data
-    print(f"Received data from characteristic {char.uuid}: {data.hex()}")
+    accX, accY, accZ, gyrX, gyrY, gyrZ, magX, magY, magZ, f1, f2, f3, f4, f5 = struct.unpack('<9f5i', data)
+
+    print("Accel:", accX, accY, accZ)
+    print("Gyro:", gyrX, gyrY, gyrZ)
+    print("Mag:", magX, magY, magZ)
+    print("Finger 1:", f1)
 
 # Discover and return a device with name dName
 async def findDevice(dName):
