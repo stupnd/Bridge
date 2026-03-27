@@ -1,4 +1,3 @@
-import React from "react";
 import { Outlet, NavLink } from "react-router";
 import { Home, BookOpen, User, Hand } from "lucide-react";
 
