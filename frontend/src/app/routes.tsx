@@ -5,6 +5,7 @@ import Learn from "./pages/Learn";
 import Sensor from "./pages/Sensor";
 import Profile from "./pages/Profile";
 import Layout from "./components/Layout";
+import HandVisualizer from "./components/HandVisualizer";
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
       { path: "learn", Component: Learn },
       { path: "sensor", Component: Sensor },
       { path: "profile", Component: Profile },
+      { path: "hand", Component: HandVisualizer },
     ],
   },
 ]);

@@ -1,5 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../../supabaseClient";
+import {
+  clearFlexCalibrationStorage,
+  defaultBent,
+  defaultStraight,
+  loadFlexCalibration,
+  rawToBendNormalized,
+  saveFlexCalibration,
+} from "../lib/flexCalibrationStorage";
 
 const SERVICE_UUID = "3104838b-5ed7-4e6c-ac03-7823dd9d4c7b";
 const CHARACTERISTIC_UUID = "77283f94-81cf-4438-be8a-642fe725ccbd";
@@ -170,9 +178,20 @@ export default function FlexSensor() {
   const [calibration, setCalibration] = useState<CalibrationData | null>(null);
   const [calibStep, setCalibStep] = useState<CalibStep>("idle");
   const [calibCountdown, setCalibCountdown] = useState(0);
+  const [calibHint, setCalibHint] = useState<string | null>(null);
   const latestFingers = useRef<number[]>([0, 0, 0, 0, 0]);
+  const calibrationRef = useRef<CalibrationData | null>(null);
 
   useEffect(() => {
+    calibrationRef.current = calibration;
+  }, [calibration]);
+
+  useEffect(() => {
+    const stored = loadFlexCalibration();
+    if (stored) {
+      setCalibration({ open: stored.straight, closed: stored.bent });
+      setCalibStep("done");
+    }
     loadProfiles();
   }, []);
 
@@ -214,8 +233,6 @@ export default function FlexSensor() {
         setConnected(false);
         setStatus("Disconnected");
         setFingers([0, 0, 0, 0, 0]);
-        setCalibration(null);
-        setCalibStep("idle");
       });
     } catch (err) {
       setStatus("Error: " + (err instanceof Error ? err.message : "Unknown"));
@@ -256,7 +273,35 @@ export default function FlexSensor() {
     const closedVals = await collectSamples(15, 100);
 
     setCalibration({ open: openVals, closed: closedVals });
+    saveFlexCalibration(openVals, closedVals);
     setCalibStep("done");
+    setCalibHint("Calibration saved — shared with Hand Visualizer.");
+  }
+
+  function captureOpenFromCurrentPose() {
+    const v = [...latestFingers.current];
+    const closed =
+      calibrationRef.current?.closed ?? defaultBent();
+    setCalibration({ open: v, closed });
+    saveFlexCalibration(v, closed);
+    setCalibStep("done");
+    setCalibHint("Open-hand pose saved. Adjust closed pose with “Set closed” if needed.");
+  }
+
+  function captureClosedFromCurrentPose() {
+    const v = [...latestFingers.current];
+    const open = calibrationRef.current?.open ?? defaultStraight();
+    setCalibration({ open, closed: v });
+    saveFlexCalibration(open, v);
+    setCalibStep("done");
+    setCalibHint("Closed pose saved.");
+  }
+
+  function resetSavedCalibration() {
+    clearFlexCalibrationStorage();
+    setCalibration(null);
+    setCalibStep("idle");
+    setCalibHint("Saved calibration cleared. Use wizard or quick capture again.");
   }
 
   async function recordGesture() {
@@ -302,9 +347,9 @@ export default function FlexSensor() {
   // Finger bend % for display (0–100)
   const bendPercents = fingers.map((raw, i) => {
     if (!calibration) return Math.round((raw / 4095) * 100);
-    const range = calibration.closed[i] - calibration.open[i];
-    if (Math.abs(range) < 10) return 0;
-    return Math.min(100, Math.max(0, Math.round(((raw - calibration.open[i]) / range) * 100)));
+    return Math.round(
+      rawToBendNormalized(raw, calibration.open[i], calibration.closed[i]) * 100
+    );
   });
 
   const calibInProgress = calibStep !== "idle" && calibStep !== "done";
@@ -351,19 +396,77 @@ export default function FlexSensor() {
 
         {/* ── Calibration ── */}
         {connected && calibStep === "idle" && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-            <p className="font-medium text-amber-800">Calibrate sensors</p>
-            <p className="text-sm text-amber-700">
-              We'll capture your hand fully open, then fully closed, so the app
-              knows your sensor range.
-            </p>
-            <button
-              onClick={startCalibration}
-              className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
-            >
-              Start Calibration
-            </button>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-4">
+            <div className="space-y-2">
+              <p className="font-medium text-amber-800">Calibrate sensors</p>
+              <p className="text-sm text-amber-700">
+                Guided flow captures open hand, then a fist. Same data syncs with
+                the Hand Visualizer page.
+              </p>
+              <button
+                type="button"
+                onClick={startCalibration}
+                className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
+              >
+                Start guided calibration
+              </button>
+            </div>
+            <div className="border-t border-amber-200 pt-4 space-y-2">
+              <p className="text-sm font-medium text-amber-900">
+                Quick capture (current pose)
+              </p>
+              <p className="text-xs text-amber-800/90">
+                Hold the pose, then tap once. Set both open and closed for best
+                results (order doesn’t matter).
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={captureOpenFromCurrentPose}
+                  className="px-3 py-2 rounded-lg bg-white border border-amber-300 text-amber-900 text-sm font-medium hover:bg-amber-100 transition-colors"
+                >
+                  Set open hand
+                </button>
+                <button
+                  type="button"
+                  onClick={captureClosedFromCurrentPose}
+                  className="px-3 py-2 rounded-lg bg-white border border-amber-300 text-amber-900 text-sm font-medium hover:bg-amber-100 transition-colors"
+                >
+                  Set closed / bent
+                </button>
+              </div>
+            </div>
           </div>
+        )}
+
+        {connected && calibration && calibStep === "done" && (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+            <p className="text-xs font-medium text-slate-600">
+              Adjust calibration
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={captureOpenFromCurrentPose}
+                className="px-3 py-1.5 rounded-md bg-white border border-slate-300 text-slate-800 text-xs font-medium hover:bg-slate-100"
+              >
+                Re-capture open hand
+              </button>
+              <button
+                type="button"
+                onClick={captureClosedFromCurrentPose}
+                className="px-3 py-1.5 rounded-md bg-white border border-slate-300 text-slate-800 text-xs font-medium hover:bg-slate-100"
+              >
+                Re-capture closed
+              </button>
+            </div>
+          </div>
+        )}
+
+        {calibHint && (
+          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            {calibHint}
+          </p>
         )}
 
         {connected && calibInProgress && (
@@ -434,12 +537,25 @@ export default function FlexSensor() {
 
         {/* ── Recalibrate ── */}
         {connected && calibration && (
-          <button
-            onClick={() => { setCalibStep("idle"); setCalibration(null); }}
-            className="text-xs text-gray-400 hover:text-gray-600 underline"
-          >
-            Recalibrate
-          </button>
+          <div className="flex flex-wrap gap-3 items-center">
+            <button
+              type="button"
+              onClick={() => {
+                setCalibStep("idle");
+                setCalibHint(null);
+              }}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
+            >
+              Run calibration again
+            </button>
+            <button
+              type="button"
+              onClick={resetSavedCalibration}
+              className="text-xs text-red-500 hover:text-red-700 underline"
+            >
+              Clear saved calibration
+            </button>
+          </div>
         )}
 
         {/* ── Supported ASL letters cheat sheet ── */}
