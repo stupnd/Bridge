@@ -8,25 +8,13 @@ import {
   rawToBendNormalized,
   saveFlexCalibration,
 } from "../lib/flexCalibrationStorage";
-
-const SERVICE_UUID = "3104838b-5ed7-4e6c-ac03-7823dd9d4c7b";
-const CHARACTERISTIC_UUID = "77283f94-81cf-4438-be8a-642fe725ccbd";
-
-function parseSensorData(dv: DataView): number[] {
-  const fingers = [];
-  for (let i = 0; i < 5; i++) {
-    fingers.push(dv.getInt32(36 + i * 4, true));
-  }
-  return fingers;
-}
+import { useSensor } from "../context/SensorContext";
 
 const FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"];
 const FINGER_COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#e0d9ff"];
 
 export default function HandVisualizer() {
-  const [connected, setConnected] = useState(false);
-  const [status, setStatus] = useState("Disconnected");
-  const [fingers, setFingers] = useState<number[]>([0, 0, 0, 0, 0]);
+  const { fingers, connected, status, connect, fingersRef } = useSensor();
   const [smooth, setSmooth] = useState<number[]>([0, 0, 0, 0, 0]);
   const [detectedGesture, setDetectedGesture] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -37,7 +25,6 @@ export default function HandVisualizer() {
   const [calibHint, setCalibHint] = useState<string | null>(null);
   const calibStraightRef = useRef<number[]>(defaultStraight());
   const calibBentRef = useRef<number[]>(defaultBent());
-  const fingersRef = useRef<number[]>([0, 0, 0, 0, 0]);
   const smoothRef = useRef<number[]>([0, 0, 0, 0, 0]);
   const animRef = useRef<number>(0);
 
@@ -94,36 +81,6 @@ export default function HandVisualizer() {
     }
     setDetectedGesture(bestScore < THRESHOLD ? bestMatch?.Label : null);
   }, [fingers, profiles, connected]);
-
-  async function connect() {
-    try {
-      if (!("bluetooth" in navigator)) { setStatus("Error: not supported"); return; }
-      setStatus("Scanning...");
-      const device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true, optionalServices: [SERVICE_UUID],
-      });
-      setStatus("Connecting...");
-      const server = await device.gatt!.connect();
-      const service = await server.getPrimaryService(SERVICE_UUID);
-      const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-      await characteristic.startNotifications();
-      characteristic.addEventListener("characteristicvaluechanged", (e: Event) => {
-        const dv = (e.target as any).value as DataView;
-        if (!dv) return;
-        const vals = parseSensorData(dv);
-        fingersRef.current = vals;
-        setFingers([...vals]);
-      });
-      setConnected(true);
-      setStatus("Connected ✓");
-      device.addEventListener("gattserverdisconnected", () => {
-        setConnected(false); setStatus("Disconnected");
-        setFingers([0,0,0,0,0]); fingersRef.current = [0,0,0,0,0];
-      });
-    } catch (err) {
-      setStatus("Error: " + (err instanceof Error ? err.message : "Unknown"));
-    }
-  }
 
   function captureStraight() {
     const v = [...fingersRef.current];

@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+const url = "https://ikknzseleljgjrcyxthn.supabase.co"
+const key = "sb_publishable_A50E7AdAbDtp1Y2yy5zsmQ__7zdnXO4"
 
 if (!url || !key) {
   throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY");

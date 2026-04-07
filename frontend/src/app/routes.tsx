@@ -6,6 +6,8 @@ import Sensor from "./pages/Sensor";
 import Profile from "./pages/Profile";
 import Layout from "./components/Layout";
 import HandVisualizer from "./components/HandVisualizer";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { SensorProvider } from "./context/SensorContext";
 
 export const router = createBrowserRouter([
   {
@@ -14,7 +16,13 @@ export const router = createBrowserRouter([
   },
   {
     path: "/app",
-    Component: Layout,
+    element: (
+      <ProtectedRoute>
+        <SensorProvider>
+          <Layout />
+        </SensorProvider>
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, Component: Dashboard },
       { path: "learn", Component: Learn },

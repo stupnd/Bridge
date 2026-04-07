@@ -8,9 +8,8 @@ import {
   rawToBendNormalized,
   saveFlexCalibration,
 } from "../lib/flexCalibrationStorage";
+import { useSensor } from "../context/SensorContext";
 
-const SERVICE_UUID = "3104838b-5ed7-4e6c-ac03-7823dd9d4c7b";
-const CHARACTERISTIC_UUID = "77283f94-81cf-4438-be8a-642fe725ccbd";
 const FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"] as const;
 const MATCH_THRESHOLD = 300;
 
@@ -37,9 +36,19 @@ const ASL_RULES: GestureRule[] = [
     description: "All fingers up, thumb bent across palm",
   },
   {
-    label: "C",
-    fingers: [null, false, false, false, false],
-    description: "All fingers curved like a C",
+    label: "D",
+    fingers: [true, false, true, true, true],
+    description: "Index pointing up, others curled, thumb touches middle",
+  },
+  {
+    label: "F",
+    fingers: [true, true, false, false, false],
+    description: "Index and thumb touch, middle/ring/pinky up",
+  },
+  {
+    label: "I",
+    fingers: [true, true, true, true, false],
+    description: "Pinky up, all others curled",
   },
   {
     label: "L",
@@ -47,24 +56,19 @@ const ASL_RULES: GestureRule[] = [
     description: "Index up, thumb out — like an L shape",
   },
   {
+    label: "S",
+    fingers: [true, true, true, true, true],
+    description: "All fingers curled into fist, thumb over fingers",
+  },
+  {
+    label: "U",
+    fingers: [true, false, false, true, true],
+    description: "Index and middle up together, rest curled",
+  },
+  {
     label: "Y",
     fingers: [false, true, true, true, false],
     description: "Thumb + pinky out, others bent",
-  },
-  {
-    label: "5",
-    fingers: [false, false, false, false, false],
-    description: "All five fingers spread open",
-  },
-  {
-    label: "1",
-    fingers: [true, false, true, true, true],
-    description: "Only index finger pointing up",
-  },
-  {
-    label: "6",
-    fingers: [false, false, false, false, true],
-    description: "Pinky touching thumb, others open",
   },
 ];
 
@@ -82,14 +86,6 @@ type CalibrationData = {
   open: number[];  // raw values when fully open
   closed: number[]; // raw values when fully closed
 };
-
-function parseSensorData(dv: DataView): number[] {
-  const fingers = [];
-  for (let i = 0; i < 5; i++) {
-    fingers.push(dv.getInt32(36 + i * 4, true));
-  }
-  return fingers;
-}
 
 // Returns true if finger is bent, false if straight, based on calibration
 function classifyFinger(
@@ -167,9 +163,7 @@ function findClosestGesture(
 type CalibStep = "idle" | "open" | "open_hold" | "closed" | "closed_hold" | "done";
 
 export default function FlexSensor() {
-  const [fingers, setFingers] = useState<number[]>([0, 0, 0, 0, 0]);
-  const [connected, setConnected] = useState(false);
-  const [status, setStatus] = useState("Disconnected");
+  const { fingers, connected, status, connect, disconnect, fingersRef } = useSensor();
   const [profiles, setProfiles] = useState<GestureProfile[]>([]);
   const [label, setLabel] = useState("");
   const [saving, setSaving] = useState(false);
@@ -179,7 +173,6 @@ export default function FlexSensor() {
   const [calibStep, setCalibStep] = useState<CalibStep>("idle");
   const [calibCountdown, setCalibCountdown] = useState(0);
   const [calibHint, setCalibHint] = useState<string | null>(null);
-  const latestFingers = useRef<number[]>([0, 0, 0, 0, 0]);
   const calibrationRef = useRef<CalibrationData | null>(null);
 
   useEffect(() => {
@@ -204,46 +197,11 @@ export default function FlexSensor() {
     }
   }
 
-  async function connect() {
-    try {
-      if (!("bluetooth" in navigator)) {
-        setStatus("Error: Web Bluetooth not supported");
-        return;
-      }
-      setStatus("Scanning...");
-      const device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [SERVICE_UUID],
-      });
-      setStatus("Connecting...");
-      const server = await device.gatt!.connect();
-      const service = await server.getPrimaryService(SERVICE_UUID);
-      const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-      await characteristic.startNotifications();
-      characteristic.addEventListener("characteristicvaluechanged", (e: Event) => {
-        const dv = (e.target as any).value as DataView;
-        if (!dv) return;
-        const vals = parseSensorData(dv);
-        latestFingers.current = vals;
-        setFingers([...vals]);
-      });
-      setConnected(true);
-      setStatus("Connected ✓");
-      device.addEventListener("gattserverdisconnected", () => {
-        setConnected(false);
-        setStatus("Disconnected");
-        setFingers([0, 0, 0, 0, 0]);
-      });
-    } catch (err) {
-      setStatus("Error: " + (err instanceof Error ? err.message : "Unknown"));
-    }
-  }
-
   // Collect N samples and average them
   async function collectSamples(n = 10, intervalMs = 100): Promise<number[]> {
     const readings: number[][] = [];
     for (let i = 0; i < n; i++) {
-      readings.push([...latestFingers.current]);
+      readings.push([...fingersRef.current]);
       await new Promise((r) => setTimeout(r, intervalMs));
     }
     return readings[0].map((_, i) =>
@@ -275,11 +233,11 @@ export default function FlexSensor() {
     setCalibration({ open: openVals, closed: closedVals });
     saveFlexCalibration(openVals, closedVals);
     setCalibStep("done");
-    setCalibHint("Calibration saved — shared with Hand Visualizer.");
+    setCalibHint("Calibration saved.");
   }
 
   function captureOpenFromCurrentPose() {
-    const v = [...latestFingers.current];
+    const v = [...fingersRef.current];
     const closed =
       calibrationRef.current?.closed ?? defaultBent();
     setCalibration({ open: v, closed });
@@ -289,7 +247,7 @@ export default function FlexSensor() {
   }
 
   function captureClosedFromCurrentPose() {
-    const v = [...latestFingers.current];
+    const v = [...fingersRef.current];
     const open = calibrationRef.current?.open ?? defaultStraight();
     setCalibration({ open, closed: v });
     saveFlexCalibration(open, v);
@@ -312,7 +270,7 @@ export default function FlexSensor() {
 
     const readings: number[][] = [];
     for (let i = 0; i < 3; i++) {
-      readings.push([...latestFingers.current]);
+      readings.push([...fingersRef.current]);
       await new Promise((r) => setTimeout(r, 300));
     }
     const avg = readings[0].map((_, i) =>
@@ -385,14 +343,24 @@ export default function FlexSensor() {
           </div>
         )}
 
-        {!connected && (
-          <button
-            onClick={connect}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
-          >
-            Connect via Bluetooth
-          </button>
-        )}
+        <div className="flex gap-2">
+          {!connected && (
+            <button
+              onClick={connect}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+            >
+              Connect via Bluetooth
+            </button>
+          )}
+          {connected && (
+            <button
+              onClick={disconnect}
+              className="px-4 py-2 rounded-lg bg-red-100 text-red-600 text-sm font-medium hover:bg-red-200 transition-colors"
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
 
         {/* ── Calibration ── */}
         {connected && calibStep === "idle" && (
@@ -400,8 +368,7 @@ export default function FlexSensor() {
             <div className="space-y-2">
               <p className="font-medium text-amber-800">Calibrate sensors</p>
               <p className="text-sm text-amber-700">
-                Guided flow captures open hand, then a fist. Same data syncs with
-                the Hand Visualizer page.
+                Guided flow captures open hand, then a fist.
               </p>
               <button
                 type="button"

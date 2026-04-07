@@ -1,16 +1,37 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Hand } from "lucide-react";
+import { supabase } from "../../supabaseClient";
 
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login - navigate to dashboard
-    navigate("/app");
+    setError("");
+    setLoading(true);
+
+    if (isSignUp) {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        setError(error.message);
+      } else {
+        setError("Check your email for a confirmation link.");
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error.message);
+      } else {
+        navigate("/app");
+      }
+    }
+    setLoading(false);
   };
 
   return (
@@ -25,11 +46,9 @@ export default function Login() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8">
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm mb-2 text-gray-700">
-                Email
-              </label>
+              <label htmlFor="email" className="block text-sm mb-2 text-gray-700">Email</label>
               <input
                 id="email"
                 type="email"
@@ -42,9 +61,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm mb-2 text-gray-700">
-                Password
-              </label>
+              <label htmlFor="password" className="block text-sm mb-2 text-gray-700">Password</label>
               <input
                 id="password"
                 type="password"
@@ -56,26 +73,30 @@ export default function Login() {
               />
             </div>
 
+            {error && (
+              <p className={`text-sm ${error.includes("Check your email") ? "text-green-600" : "text-red-500"}`}>
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              Log In
+              {loading ? "..." : isSignUp ? "Sign Up" : "Log In"}
             </button>
           </form>
-
-          <div className="mt-6 text-center">
-            <a href="#" className="text-sm text-indigo-600 hover:underline">
-              Forgot your password?
-            </a>
-          </div>
         </div>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          Don't have an account?{" "}
-          <a href="#" className="text-indigo-600 hover:underline">
-            Sign up
-          </a>
+          {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+          <button
+            onClick={() => { setIsSignUp(!isSignUp); setError(""); }}
+            className="text-indigo-600 hover:underline"
+          >
+            {isSignUp ? "Log in" : "Sign up"}
+          </button>
         </p>
       </div>
     </div>

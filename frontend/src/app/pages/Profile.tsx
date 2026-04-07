@@ -1,10 +1,12 @@
 import { useNavigate } from "react-router";
 import { User, Mail, Calendar, Award, LogOut, Settings, Info } from "lucide-react";
+import { supabase } from "../../supabaseClient";
 
 export default function Profile() {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate("/");
   };
 
