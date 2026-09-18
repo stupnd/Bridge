@@ -1,0 +1,43 @@
+name: Commit Log
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - COMMIT_LOG.md
+
+permissions:
+  contents: write
+
+jobs:
+  log:
+    # Don't re-trigger on the log commit this job itself pushes.
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add pushed commits to COMMIT_LOG.md
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          if [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            RANGE="$AFTER"          # first push / force push: log only the head commit
+          else
+            RANGE="$BEFORE..$AFTER"
+          fi
+          .github/scripts/commit-log.sh "$RANGE" "${{ github.actor }}"
+
+      - name: Commit and push log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add COMMIT_LOG.md
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: update commit log [skip ci]"
+          # Retry once in case another push landed while this job ran.
+          git push || (git pull --rebase && git push)
