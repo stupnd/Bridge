@@ -2,6 +2,17 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-09-18 09:26 — Stuti Pandya · [`23d4aca`](https://github.com/stupnd/Bridge/commit/23d4acab5e30209c1af6a5c107d80ef02c1137d5) · pushed by @stupnd
+
+**Improve 9-axis test sketch with I2C scan and column output**
+
+Scans the I2C bus on boot to surface wiring problems, tries both
+ICM-20948 addresses (AD0=0/1), and prints one tab-aligned row per
+sample instead of four lines.
+
+Files changed (1):
+- `ESP32/9-axis-test/9-axis-test.ino` (+55 / −26)
+
 ### 2026-09-18 09:24 — Stuti Pandya · [`0f7e17d`](https://github.com/stupnd/Bridge/commit/0f7e17d917cd773ab2e712547d03717a077cdfa3) · pushed by @stupnd
 
 **Add GitHub Action that logs every commit to COMMIT_LOG.md**
