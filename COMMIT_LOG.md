@@ -2,6 +2,18 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-09-18 09:24 — Stuti Pandya · [`0f7e17d`](https://github.com/stupnd/Bridge/commit/0f7e17d917cd773ab2e712547d03717a077cdfa3) · pushed by @stupnd
+
+**Add GitHub Action that logs every commit to COMMIT_LOG.md**
+
+Runs on push to main and records author, date, message, and files
+changed for each commit, newest first. Seeded with existing history.
+
+Files changed (3):
+- `.github/scripts/commit-log.sh` (+67 / −0)
+- `.github/workflows/commit-log.yml` (+43 / −0)
+- `COMMIT_LOG.md` (+496 / −0)
+
 ### 2026-04-13 13:21 — Stuti Pandya · [`f7f2d92`](https://github.com/stupnd/Bridge/commit/f7f2d926bbb0d82c858cbd6e2396de8acd2579bb)
 
 **Refactor to use finger sensors and remove IMU code**
@@ -493,4 +505,3 @@ Files changed (13):
 - `src/components/SensorGraph.js` (+80 / −0)
 - `src/index.css` (+14 / −0)
 - `src/index.js` (+11 / −0)
-
