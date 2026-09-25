@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Learn from "./pages/Learn";
 import Sensor from "./pages/Sensor";
 import Profile from "./pages/Profile";
+import Collect from "./pages/Collect";
 import Layout from "./components/Layout";
 import HandVisualizer from "./components/HandVisualizer";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: "sensor", Component: Sensor },
       { path: "profile", Component: Profile },
       { path: "hand", Component: HandVisualizer },
+      { path: "collect", Component: Collect },
     ],
   },
 ]);
