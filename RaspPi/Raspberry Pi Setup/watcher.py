@@ -60,12 +60,27 @@ def wait_for_quiet(inotify):
 
 
 def kill_python_processes():
-    """Kill every other running python process."""
+    """Kill any previously running main.py process cleanly."""
     global running_proc
-    my_pid = os.getpid()
+    
+    # If we have a direct handle on the process we spawned, terminate it safely
+    if running_proc is not None:
+        try:
+            running_proc.terminate()
+            running_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            running_proc.kill()
+        except ProcessLookupError:
+            pass
+        running_proc = None
+        return
+
+    # Fallback: Only kill other instances explicitly running main.py
     out = subprocess.run(
-        ["pgrep", "-f", "python"], capture_output=True, text=True
+        ["pgrep", "-f", "main.py"], capture_output=True, text=True
     ).stdout.split()
+    
+    my_pid = os.getpid()
     for pid_str in out:
         pid = int(pid_str)
         if pid == my_pid:
@@ -75,18 +90,6 @@ def kill_python_processes():
         except ProcessLookupError:
             pass
 
-    subprocess.run(["sleep", "2"])
-
-    for pid_str in out:
-        pid = int(pid_str)
-        if pid == my_pid:
-            continue
-        try:
-            os.kill(pid, 9)   # SIGKILL any stragglers
-        except ProcessLookupError:
-            pass
-
-    running_proc = None
 
 
 def mount_image_ro():
@@ -128,7 +131,10 @@ def launch_main_if_present():
         [python_bin, "-u", "main.py"],
         cwd=PAYLOAD_DIR,
         env=env,
+        stdout=sys.stdout,  # Redirect stdout to systemd journal
+        stderr=sys.stderr   # Redirect errors to systemd journal
     )
+
 
     print(f"Launched main.py (pid {running_proc.pid}) via {python_bin}")
 
