@@ -2,6 +2,16 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-09-25 10:33 — Krisha Veera · [`5282362`](https://github.com/stupnd/Bridge/commit/5282362861425bdef0e9927c42f651e42f9c8b8f) · pushed by @KrishaVeera
+
+**Add ML data-collection page with Supabase sync and CSV export**
+
+Files changed (4):
+- `frontend/src/app/components/DataCollector.tsx` (+481 / −0)
+- `frontend/src/app/components/Layout.tsx` (+2 / −1)
+- `frontend/src/app/pages/Collect.tsx` (+16 / −0)
+- `frontend/src/app/routes.tsx` (+2 / −0)
+
 ### 2026-09-18 09:26 — Stuti Pandya · [`23d4aca`](https://github.com/stupnd/Bridge/commit/23d4acab5e30209c1af6a5c107d80ef02c1137d5) · pushed by @stupnd
 
 **Improve 9-axis test sketch with I2C scan and column output**
