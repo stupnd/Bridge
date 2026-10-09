@@ -2,6 +2,51 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-10-09 08:54 — William · [`d84ee02`](https://github.com/stupnd/Bridge/commit/d84ee0265020c330b5830468b544bef4e64f7215) · pushed by @TheCakeOfTruth
+
+**Merge pull request #7 from stupnd/rasppi-tts**
+
+Set up the Raspberry Pi and text-to-speech
+
+Files changed (9):
+- `.gitignore` (+4 / −0)
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/Raspberry Pi Setup/watcher.py` (+196 / −0)
+- `RaspPi/package-export.txt` (+26 / −0)
+- `RaspPi/tts-test/main.py` (+4 / −0)
+- `RaspPi/tts-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/tts-test/modules/bluetooth.py` (+59 / −0)
+- `RaspPi/tts-test/modules/tts.py` (+47 / −0)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
+### 2026-10-02 10:56 — Cake · [`4b4192e`](https://github.com/stupnd/Bridge/commit/4b4192ebdf5ede649767f6694432077e8757d12d) · pushed by @TheCakeOfTruth
+
+**Began work on bluetooth connection**
+
+Files changed (8):
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/Raspberry Pi Setup/watcher.py` (+20 / −14)
+- `RaspPi/package-export.txt` (+11 / −1)
+- `RaspPi/tts-test/main.py` (+3 / −37)
+- `RaspPi/tts-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/tts-test/modules/bluetooth.py` (+59 / −0)
+- `RaspPi/tts-test/modules/tts.py` (+47 / −0)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
+### 2026-09-26 23:39 — Cake · [`646a75f`](https://github.com/stupnd/Bridge/commit/646a75fef230bc63dc46598c850082e7310629c4) · pushed by @TheCakeOfTruth
+
+**Set up the Raspberry Pi, added a test script for text-to-speech**
+
+See setup instructions and package-export for usage instructions.
+
+Files changed (6):
+- `.gitignore` (+4 / −0)
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/Raspberry Pi Setup/watcher.py` (+190 / −0)
+- `RaspPi/package-export.txt` (+16 / −0)
+- `RaspPi/tts-test/main.py` (+38 / −0)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
 ### 2026-09-25 10:33 — Krisha Veera · [`5282362`](https://github.com/stupnd/Bridge/commit/5282362861425bdef0e9927c42f651e42f9c8b8f) · pushed by @KrishaVeera
 
 **Add ML data-collection page with Supabase sync and CSV export**
