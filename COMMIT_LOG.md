@@ -2,6 +2,24 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-10-16 12:19 — Krisha · [`22ecfa1`](https://github.com/stupnd/Bridge/commit/22ecfa10630fc688049d97a78a5158f4d39c4f6e) · pushed by @KrishaVeera
+
+**Collect page: frame-by-frame recording for all sign types, CSV export, IndexedDB autosave**
+
+- SensorContext parses IMU + flex from every packet and exposes subscribe() for per-frame capture
+- DataCollector drops Supabase; adds hand toggle, free-text label, Static/Moving/None types with editable window, countdown + progress, per-sample rate/IMU warnings, delete-last
+- Long-format frames CSV (R_/L_ columns) plus per-session calibration CSV
+- Autosave to IndexedDB with restore on load; dev-only glove simulator at 50 Hz
+
+Files changed (7):
+- `frontend/src/app/components/DataCollector.tsx` (+403 / −265)
+- `frontend/src/app/context/SensorContext.tsx` (+121 / −13)
+- `frontend/src/app/lib/captureFrames.ts` (+44 / −0)
+- `frontend/src/app/lib/collectData.ts` (+159 / −0)
+- `frontend/src/app/lib/collectStorage.ts` (+46 / −0)
+- `frontend/src/app/lib/gloveSimulator.ts` (+35 / −0)
+- `frontend/src/app/pages/Collect.tsx` (+2 / −1)
+
 ### 2026-10-09 08:54 — William · [`d84ee02`](https://github.com/stupnd/Bridge/commit/d84ee0265020c330b5830468b544bef4e64f7215) · pushed by @TheCakeOfTruth
 
 **Merge pull request #7 from stupnd/rasppi-tts**
