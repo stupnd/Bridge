@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { rawToBendNormalized, saveFlexCalibration } from "../lib/flexCalibrationStorage";
+import { rawToBendNormalized } from "../lib/flexCalibrationStorage";
 import { useSensor } from "../context/SensorContext";
 import { averageFingers, captureFrames } from "../lib/captureFrames";
 import {
@@ -17,6 +17,7 @@ import {
   type SignType,
 } from "../lib/collectData";
 import { loadCollectData, saveCollectData } from "../lib/collectStorage";
+import { deleteUploadedSample, isTeamMember, uploadPending } from "../lib/teamRecordings";
 
 const FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"] as const;
 const PARTICIPANT_KEY = "bridge-collect-participant-id";
@@ -40,6 +41,7 @@ const SIGN_TYPE_OPTIONS: { value: SignType; label: string }[] = [
 
 type CalibStep = "idle" | "open" | "open_hold" | "closed" | "closed_hold" | "done";
 type RecPhase = "idle" | "countdown" | "capturing";
+type TeamStatus = "checking" | "member" | "not_member" | "offline";
 
 function readStored(key: string): string | null {
   try {
@@ -91,7 +93,8 @@ function Segmented<T extends string>({
   );
 }
 
-export default function DataCollector() {
+/** `onDataChange` lets the Collect page hand the samples to Movement Lab. */
+export default function DataCollector({ onDataChange }: { onDataChange?: (data: CollectData) => void }) {
   const {
     fingers,
     imu,
@@ -103,7 +106,11 @@ export default function DataCollector() {
     subscribe,
     simulating,
     setSimulating,
+    saveCalibration,
   } = useSensor();
+  const imuValues = [...imu.acc, ...imu.gyr, ...imu.mag];
+  const onDataChangeRef = useRef(onDataChange);
+  onDataChangeRef.current = onDataChange;
 
   // ── Session setup ──
   const [participantId, setParticipantId] = useState(() => readStored(PARTICIPANT_KEY) ?? "");
@@ -129,6 +136,18 @@ export default function DataCollector() {
   const [restoreMsg, setRestoreMsg] = useState("");
   const [saveError, setSaveError] = useState("");
 
+  // ── Team dataset (Supabase) ──
+  const [team, setTeam] = useState<TeamStatus>("checking");
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState("");
+  const syncingRef = useRef(false);
+
+  useEffect(() => {
+    isTeamMember()
+      .then((member) => setTeam(member ? "member" : "not_member"))
+      .catch(() => setTeam("offline"));
+  }, []);
+
   useEffect(() => writeStored(PARTICIPANT_KEY, participantId), [participantId]);
   useEffect(() => writeStored(HAND_KEY, hand), [hand]);
 
@@ -139,6 +158,7 @@ export default function DataCollector() {
         if (cancelled || !saved) return;
         dataRef.current = saved;
         setData(saved);
+        onDataChangeRef.current?.(saved);
         const n = saved.samples.length;
         if (n > 0) setRestoreMsg(`Restored ${n} sample${n === 1 ? "" : "s"} from a previous session.`);
       })
@@ -157,6 +177,7 @@ export default function DataCollector() {
   async function commit(next: CollectData) {
     dataRef.current = next;
     setData(next);
+    onDataChangeRef.current?.(next);
     try {
       await saveCollectData(next);
       setSaveError("");
@@ -164,6 +185,33 @@ export default function DataCollector() {
       setSaveError("Autosave failed — download the CSV to keep your data. (" + errorMessage(err) + ")");
     }
   }
+
+  /** Uploads anything not yet in the team dataset. Safe to call often. */
+  async function sync() {
+    if (team !== "member" || syncingRef.current) return;
+    syncingRef.current = true;
+    setSyncing(true);
+    try {
+      const sent = await uploadPending(dataRef.current);
+      if (sent.size) {
+        await commit({
+          ...dataRef.current,
+          samples: dataRef.current.samples.map((s) => (sent.has(s.sample_id) ? { ...s, uploaded: true } : s)),
+        });
+      }
+      setSyncError("");
+    } catch (err) {
+      setSyncError("Upload failed; samples are safe in this browser. (" + errorMessage(err) + ")");
+    } finally {
+      syncingRef.current = false;
+      setSyncing(false);
+    }
+  }
+
+  // Catch up on anything recorded offline or before signing in to a team account.
+  useEffect(() => {
+    if (loaded && team === "member") sync();
+  }, [loaded, team]);
 
   const normalizedLabel = label.trim().toUpperCase();
   const windowValid = windowMs >= MIN_WINDOW_MS && windowMs <= MAX_WINDOW_MS;
@@ -195,7 +243,8 @@ export default function DataCollector() {
     setCalibStep("closed_hold");
     const closed = averageFingers((await captureFrames(subscribe, CALIB_HOLD_MS)).frames, fingersRef.current);
 
-    saveFlexCalibration(open, closed);
+    // Shared app-wide, so Translate and the Lab use this calibration too.
+    saveCalibration({ open, closed });
     setCalibStep("done");
 
     const session: CollectSession = {
@@ -258,11 +307,21 @@ export default function DataCollector() {
 
     setRecPhase("idle");
     await commit({ ...dataRef.current, samples: [...dataRef.current.samples, sample] });
+    await sync();
   }
 
   async function deleteLastSample() {
     const samples = dataRef.current.samples;
     if (samples.length === 0) return;
+    const last = samples[samples.length - 1];
+    if (last.uploaded) {
+      try {
+        await deleteUploadedSample(last.sample_id);
+      } catch (err) {
+        setSyncError("Couldn't delete it from the team dataset. (" + errorMessage(err) + ")");
+        return;
+      }
+    }
     await commit({ ...dataRef.current, samples: samples.slice(0, -1) });
   }
 
@@ -270,7 +329,8 @@ export default function DataCollector() {
     const n = dataRef.current.samples.length;
     const ok = window.confirm(
       `Delete all ${n} sample${n === 1 ? "" : "s"} saved in this browser? ` +
-        "This can't be undone — download the CSV first if you need it."
+        "This can't be undone — download the CSV first if you need it. " +
+        "Samples already uploaded stay in the team dataset."
     );
     if (!ok) return;
     setRestoreMsg("");
@@ -394,6 +454,11 @@ export default function DataCollector() {
             {restoreMsg}
           </p>
         )}
+        {syncError && (
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {syncError}
+          </p>
+        )}
         {saveError && (
           <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {saveError}
@@ -462,9 +527,9 @@ export default function DataCollector() {
               </div>
             ))}
             <p className="text-xs text-gray-500 font-mono">
-              acc {imu.slice(0, 3).map((v) => v.toFixed(0)).join(" / ")} mg · gyro{" "}
-              {imu.slice(3, 6).map((v) => v.toFixed(1)).join(" / ")} dps · mag{" "}
-              {imu.slice(6, 9).map((v) => v.toFixed(1)).join(" / ")} µT
+              acc {imuValues.slice(0, 3).map((v) => v.toFixed(0)).join(" / ")} mg · gyro{" "}
+              {imuValues.slice(3, 6).map((v) => v.toFixed(1)).join(" / ")} dps · mag{" "}
+              {imuValues.slice(6, 9).map((v) => v.toFixed(1)).join(" / ")} µT
             </p>
           </div>
         )}
@@ -556,7 +621,16 @@ export default function DataCollector() {
         {/* ── Sample log ── */}
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-gray-700">Samples ({samples.length})</p>
+            <div>
+              <p className="text-sm font-medium text-gray-700">Samples ({samples.length})</p>
+              <TeamSyncStatus
+                team={team}
+                uploaded={samples.filter((s) => s.uploaded).length}
+                total={samples.length}
+                syncing={syncing}
+                onSync={sync}
+              />
+            </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -615,5 +689,36 @@ export default function DataCollector() {
         </div>
       </div>
     </div>
+  );
+}
+
+function TeamSyncStatus({ team, uploaded, total, syncing, onSync }: {
+  team: TeamStatus;
+  uploaded: number;
+  total: number;
+  syncing: boolean;
+  onSync: () => void;
+}) {
+  if (team === "checking") return null;
+  if (team === "offline") {
+    return <p className="text-xs text-amber-700">Can't reach the team dataset; samples stay in this browser.</p>;
+  }
+  if (team === "not_member") {
+    return (
+      <p className="text-xs text-gray-500">
+        This account isn't on the team, so samples stay in this browser. Ask a teammate to add you.
+      </p>
+    );
+  }
+  const pending = total - uploaded;
+  return (
+    <p className="text-xs text-gray-500">
+      {syncing ? "Uploading…" : `${uploaded} of ${total} in the team dataset`}
+      {!syncing && pending > 0 && (
+        <button type="button" onClick={onSync} className="ml-2 font-medium text-indigo-600 hover:underline">
+          Upload {pending} now
+        </button>
+      )}
+    </p>
   );
 }

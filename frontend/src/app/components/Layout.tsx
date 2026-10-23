@@ -1,85 +1,73 @@
-import { Outlet, NavLink } from "react-router";
-import { Home, BookOpen, User, Hand, ClipboardList } from "lucide-react";
+import { Outlet, NavLink, Link } from "react-router";
+import { MessageSquareText, BookOpen, User, Hand, ClipboardList, FlaskConical } from "lucide-react";
+import GloveStatus from "./GloveStatus";
+
+const NAV_ITEMS = [
+  { path: "/app", label: "Translate", icon: MessageSquareText, end: true },
+  { path: "/app/learn", label: "Learn", icon: BookOpen, end: false },
+  { path: "/app/glove", label: "Glove", icon: Hand, end: false },
+  { path: "/app/collect", label: "Collect", icon: ClipboardList, end: false },
+  { path: "/app/lab", label: "Lab", icon: FlaskConical, end: false },
+  { path: "/app/profile", label: "Account", icon: User, end: false },
+];
 
 export default function Layout() {
-  const navItems = [
-    { path: "/app", label: "Dashboard", icon: Home, end: true },
-    { path: "/app/learn", label: "Learn", icon: BookOpen, end: false },
-    { path: "/app/sensor", label: "Sensor", icon: Hand, end: false },
-    { path: "/app/collect", label: "Collect", icon: ClipboardList, end: false },
-    { path: "/app/profile", label: "Account", icon: User, end: false },
-  ];
-
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-                <Hand className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl">Bridge</span>
-            </div>
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
+          <Link to="/app" className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600">
+              <Hand className="h-5 w-5 text-white" />
+            </span>
+            <span className="text-lg font-semibold">Bridge</span>
+          </Link>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex gap-1">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                      isActive
-                        ? "bg-indigo-50 text-indigo-600"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`
-                  }
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
-            </nav>
-          </div>
+          <nav className="hidden md:flex gap-1" aria-label="Main">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.end}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isActive ? "bg-indigo-50 font-medium text-indigo-700" : "text-gray-600 hover:bg-gray-100"
+                  }`
+                }
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <GloveStatus />
         </div>
       </header>
 
-      {/* Main Content */}
       <main>
         <Outlet />
       </main>
 
-      {/* Product Intent Footer */}
-      <footer className="hidden md:block bg-white border-t border-gray-200 py-4">
-        <div className="max-w-7xl mx-auto px-6">
-          <p className="text-center text-sm text-gray-600">
-            Bridge translates sign language into real-time text to improve everyday communication.
-          </p>
-        </div>
-      </footer>
-
-      {/* Mobile Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
-        <div className="flex justify-around">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.end}
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-4 py-3 flex-1 transition-colors ${
-                  isActive ? "text-indigo-600" : "text-gray-600"
-                }`
-              }
-            >
-              <item.icon className="w-6 h-6" />
-              <span className="text-xs">{item.label}</span>
-            </NavLink>
-          ))}
-        </div>
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 flex justify-around border-t border-gray-200 bg-white md:hidden"
+        aria-label="Main"
+      >
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end={item.end}
+            className={({ isActive }) =>
+              `flex flex-1 flex-col items-center gap-1 py-2.5 transition-colors ${
+                isActive ? "text-indigo-600" : "text-gray-500"
+              }`
+            }
+          >
+            <item.icon className="h-5 w-5" />
+            <span className="text-xs">{item.label}</span>
+          </NavLink>
+        ))}
       </nav>
     </div>
   );

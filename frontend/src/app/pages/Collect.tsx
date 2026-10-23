@@ -1,17 +1,24 @@
+import { useMemo, useState } from "react";
 import DataCollector from "../components/DataCollector";
+import MotionLab from "../components/MotionLab";
+import { Page, PageHeader } from "../components/common";
+import type { CollectData } from "../lib/collectData";
+import { recordingsFromCollectData } from "../lib/recordings";
 
 export default function Collect() {
-  return (
-    <div className="max-w-4xl mx-auto p-6 pb-24 md:pb-6">
-      <div className="mb-6">
-        <h1 className="text-3xl mb-2">Data Collection</h1>
-        <p className="text-gray-600">
-          Record labeled glove samples (static letters, moving signs, and a "none" class) and
-          export them as CSV.
-        </p>
-      </div>
+  const [data, setData] = useState<CollectData>({ sessions: [], samples: [] });
+  const recordings = useMemo(() => recordingsFromCollectData(data), [data]);
 
-      <DataCollector />
-    </div>
+  return (
+    <Page>
+      <PageHeader
+        title="Collect data"
+        description='Record labeled glove samples (static letters, moving signs, and a "none" class) and export them as CSV.'
+      />
+      <div className="space-y-6">
+        <DataCollector onDataChange={setData} />
+        <MotionLab recordings={recordings} />
+      </div>
+    </Page>
   );
 }

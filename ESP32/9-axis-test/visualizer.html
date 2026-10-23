@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IMU Visualizer</title>
+<!--
+  Live visualizer for the ICM-20948 9-axis test sketch (9-axis-test.ino).
+  Open this file in Chrome, close the Arduino Serial Monitor, click Connect,
+  pick the Nano ESP32's port. Needs Chrome/Edge (Web Serial API).
+  Click "Simulate" to see it move without hardware.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f2; --surface: #fcfcfb; --border: #e2e1dc;
+    --text: #0b0b0b; --text-2: #52514e; --grid: #ebeae6;
+    --x: #2a78d6; --y: #eb6834; --z: #1baf7a;
+    --face: #e8e7e2; --face-top: #ffffff; --face-side: #d8d7d1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #111110; --surface: #1a1a19; --border: #2c2c2a;
+      --text: #ffffff; --text-2: #c3c2b7; --grid: #262624;
+      --x: #3987e5; --y: #d95926; --z: #199e70;
+      --face: #2a2a28; --face-top: #3a3a37; --face-side: #222220;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  p  { margin: 0; color: var(--text-2); }
+  .topbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .topbar .status { color: var(--text-2); }
+  button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+           background: var(--surface); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--x); border-color: var(--x); color: #fff; }
+  code.raw { margin-left: auto; font-size: 12px; color: var(--text-2); white-space: pre; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+          display: flex; flex-direction: column; gap: 10px; }
+  .stage { height: 190px; display: flex; align-items: center; justify-content: center; }
+  .readout { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center;
+             font-variant-numeric: tabular-nums; font-size: 13px; }
+  .readout .axis { font-weight: 600; }
+  .readout .axis::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+                           margin-right: 6px; vertical-align: -1px; background: var(--c); }
+  .bar { position: relative; height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+  .bar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); }
+  .bar i { position: absolute; top: 0; bottom: 0; background: var(--c); border-radius: 4px; }
+  .readout .val { min-width: 64px; text-align: right; color: var(--text-2); }
+  .note { font-size: 12px; }
+  .note b { color: var(--text); }
+
+  /* accelerometer: 3D box */
+  .scene { perspective: 600px; width: 140px; height: 140px; }
+  .box { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transform: rotateX(-20deg);
+         transition: transform 80ms linear; }
+  .face { position: absolute; width: 140px; height: 140px; border: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;
+          backface-visibility: visible; }
+  .face.top    { background: var(--face-top);  transform: rotateX(90deg) translateZ(30px); color: var(--z); }
+  .face.bottom { background: var(--face-side); transform: rotateX(-90deg) translateZ(30px); }
+  .face.front  { background: var(--face);      transform: translateZ(70px); height: 60px; top: 40px; }
+  .face.back   { background: var(--face);      transform: rotateY(180deg) translateZ(70px); height: 60px; top: 40px; color: var(--y); }
+  .face.right  { background: var(--face-side); transform: rotateY(90deg) translateZ(70px); width: 140px; height: 60px; top: 40px; color: var(--x); }
+  .face.left   { background: var(--face-side); transform: rotateY(-90deg) translateZ(70px); width: 140px; height: 60px; top: 40px; }
+  .face.top .chip { width: 22px; height: 22px; border: 2px solid var(--z); border-radius: 3px; position: absolute;
+                    right: 18px; bottom: 18px; }
+
+  /* gyroscope: three wheels */
+  .wheels { display: flex; gap: 18px; }
+  .wheel { text-align: center; font-size: 12px; color: var(--text-2); }
+  .wheel svg { width: 76px; height: 76px; display: block; margin: 0 auto 4px; }
+  .wheel .disc { fill: var(--grid); stroke: var(--border); }
+  .wheel .mark { stroke: var(--c); stroke-width: 4; stroke-linecap: round; }
+
+  /* magnetometer: compass */
+  .compass { width: 150px; height: 150px; }
+  .compass .ring { fill: var(--grid); stroke: var(--border); }
+  .compass text { fill: var(--text-2); font-size: 11px; text-anchor: middle; font-weight: 600; }
+  .compass .needle-n { fill: var(--y); }
+  .compass .needle-s { fill: var(--text-2); opacity: .5; }
+  .compass .needle { transition: transform 80ms linear; transform-origin: 75px 75px; }
+
+  /* movement pad */
+  .movement { margin-top: 14px; display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; }
+  .pad { position: relative; width: 220px; height: 220px; border-radius: 12px; background: var(--grid);
+         border: 1px solid var(--border); overflow: hidden; }
+  .pad::before, .pad::after { content: ""; position: absolute; background: var(--border); }
+  .pad::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+  .pad::after  { top: 50%; left: 0; right: 0; height: 1px; }
+  .pad .lbl { position: absolute; font-size: 11px; color: var(--text-2); font-weight: 600; }
+  .pad .ball { position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; border-radius: 50%;
+               background: var(--x); box-shadow: 0 2px 8px rgba(0,0,0,.25); transform: translate(-50%,-50%); }
+  .dir { font-size: 44px; font-weight: 700; line-height: 1; height: 52px; transition: opacity .5s; opacity: 0; }
+  .dir.show { opacity: 1; transition: none; }
+  .movement .readout { max-width: 420px; }
+  @media (max-width: 640px) { .movement { grid-template-columns: 1fr; justify-items: center; } }
+
+  /* traces */
+  .traces { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .trace { position: relative; }
+  .trace canvas { width: 100%; height: 150px; display: block; }
+  .legend { display: flex; gap: 12px; font-size: 12px; color: var(--text-2); }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px;
+                         margin-right: 5px; vertical-align: 3px; background: var(--c); }
+  .tip { position: absolute; pointer-events: none; display: none; background: var(--surface);
+         border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px;
+         font-variant-numeric: tabular-nums; box-shadow: 0 2px 8px rgba(0,0,0,.12); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>ICM-20948 Visualizer</h1>
+  <button class="primary" id="connect">Connect (USB)</button>
+  <button id="simulate">Simulate</button>
+  <span class="status" id="status">Not connected. Close the Arduino Serial Monitor first.</span>
+  <code class="raw" id="raw"></code>
+</div>
+
+<div class="cards">
+
+  <div class="card">
+    <h2>Accelerometer <span style="color:var(--text-2);font-weight:400">— which way is down?</span></h2>
+    <div class="stage">
+      <div class="scene"><div class="box" id="box">
+        <div class="face top"><span>+Z</span><i class="chip"></i></div>
+        <div class="face bottom"></div>
+        <div class="face front">−Y (USB)</div>
+        <div class="face back">+Y</div>
+        <div class="face right">+X</div>
+        <div class="face left">−X</div>
+      </div></div>
+    </div>
+    <div class="readout" id="acc"></div>
+    <p class="note"><b>Units: mg</b> (1000 = 1 g). At rest the only acceleration is gravity, so whichever axis reads <b>+1000 is pointing UP</b>.
+      Flat on the table → Z ≈ +1000. Face-down → Z ≈ −1000. Standing on its edge → X or Y ≈ ±1000.
+      Shaking it shows up as spikes on top of that. <b>Use it for: tilt / orientation of the hand.</b></p>
+  </div>
+
+  <div class="card">
+    <h2>Gyroscope <span style="color:var(--text-2);font-weight:400">— how fast is it turning?</span></h2>
+    <div class="stage"><div class="wheels" id="wheels"></div></div>
+    <div class="readout" id="gyr"></div>
+    <p class="note"><b>Units: degrees per second.</b> Still → all zeros (no matter how it's tilted!).
+      Each wheel spins at the speed the sensor is rotating <b>around</b> that axis: twist it like a doorknob around X
+      and only the X wheel spins. It doesn't know <i>where</i> it is, only how fast it's turning.
+      <b>Use it for: motion / speed of a gesture.</b></p>
+  </div>
+
+  <div class="card">
+    <h2>Magnetometer <span style="color:var(--text-2);font-weight:400">— which way is north?</span></h2>
+    <div class="stage">
+      <svg class="compass" viewBox="0 0 150 150">
+        <circle class="ring" cx="75" cy="75" r="68"/>
+        <text x="75" y="20">N</text><text x="136" y="79">E</text><text x="75" y="140">S</text><text x="14" y="79">W</text>
+        <g class="needle" id="needle">
+          <polygon class="needle-n" points="75,18 68,75 82,75"/>
+          <polygon class="needle-s" points="75,132 68,75 82,75"/>
+        </g>
+        <circle cx="75" cy="75" r="4" fill="var(--text-2)"/>
+      </svg>
+    </div>
+    <div class="readout" id="mag"></div>
+    <p class="note"><b>Units: µT</b> (microtesla). It's a compass: it measures Earth's magnetic field, ~25–65 µT total.
+      Spin the sensor flat on the table and the needle tracks north. Bring a magnet, speaker, or laptop close and the
+      numbers jump. <b>Use it for: absolute heading (which way the palm faces), fixing gyro drift.</b></p>
+  </div>
+
+</div>
+
+<div class="card movement">
+  <div class="pad" id="pad">
+    <span class="lbl" style="top:6px;left:50%;transform:translateX(-50%)">up</span>
+    <span class="lbl" style="bottom:6px;left:50%;transform:translateX(-50%)">down</span>
+    <span class="lbl" style="left:6px;top:50%;transform:translateY(-50%)">left</span>
+    <span class="lbl" style="right:6px;top:50%;transform:translateY(-50%)">right</span>
+    <div class="ball" id="ball"></div>
+  </div>
+  <div>
+    <h2>Movement <span style="color:var(--text-2);font-weight:400">— which way did the hand just move?</span></h2>
+    <div class="dir" id="dir"></div>
+    <div class="readout" id="lin"></div>
+    <p class="note" style="margin-top:8px">The accelerometer reads <b>gravity + movement</b> mixed together. This panel tracks gravity with a slow filter
+      and subtracts it, leaving just your push: <b>linear acceleration</b> in mg. The ball is nudged by that push and springs back to center;
+      the ball grows for <b>forward</b> (+Y) and shrinks for <b>back</b>. The arrow shows the direction of the <i>start</i> of a move
+      (the stop at the end pushes the opposite way — that's real physics, not a bug).
+      <b>Note:</b> tilting the sensor shows up briefly as movement too, since the filter takes a moment to catch up.
+      Directions assume +X = right, +Y = forward, +Z = up on the glove; tell me if yours is mounted differently.</p>
+  </div>
+</div>
+
+<div class="traces">
+  <div class="card trace"><h2>Accel (mg), last 10 s</h2>
+    <div class="legend"><span style="--c:var(--x)">X</span><span style="--c:var(--y)">Y</span><span style="--c:var(--z)">Z</span></div>
+    <canvas data-group="acc" data-range="1500"></canvas><div class="tip"></div></div>
+  <div class="card trace"><h2>Gyro (dps), last 10 s</h2>
+    <div class="legend"><span style="--c:var(--x)">X</span><span style="--c:var(--y)">Y</span><span style="--c:var(--z)">Z</span></div>
+    <canvas data-group="gyr" data-range="360"></canvas><div class="tip"></div></div>
+  <div class="card trace"><h2>Mag (µT), last 10 s</h2>
+    <div class="legend"><span style="--c:var(--x)">X</span><span style="--c:var(--y)">Y</span><span style="--c:var(--z)">Z</span></div>
+    <canvas data-group="mag" data-range="80"></canvas><div class="tip"></div></div>
+</div>
+
+<script>
+const AXES = ['X', 'Y', 'Z'];
+const COLORS = ['var(--x)', 'var(--y)', 'var(--z)'];
+const RANGES = { acc: 1500, gyr: 360, mag: 80, lin: 1000 };
+const HISTORY_MS = 10000;
+const history = []; // { t, acc:[x,y,z], gyr:[..], mag:[..] }
+const $ = (id) => document.getElementById(id);
+
+// ---- readouts (label + centered bar + value) ----
+for (const group of ['acc', 'gyr', 'mag', 'lin']) {
+  const el = $(group);
+  AXES.forEach((axis, i) => {
+    el.insertAdjacentHTML('beforeend',
+      `<span class="axis" style="--c:${COLORS[i]}">${axis}</span>` +
+      `<div class="bar" style="--c:${COLORS[i]}"><i></i></div>` +
+      `<span class="val">0.0</span>`);
+  });
+}
+function updateReadout(group, vals) {
+  const el = $(group), range = RANGES[group];
+  const bars = el.querySelectorAll('.bar i'), texts = el.querySelectorAll('.val');
+  vals.forEach((v, i) => {
+    const frac = Math.max(-1, Math.min(1, v / range)) * 50; // percent from center
+    bars[i].style.left = (frac < 0 ? 50 + frac : 50) + '%';
+    bars[i].style.width = Math.abs(frac) + '%';
+    texts[i].textContent = v.toFixed(1);
+  });
+}
+
+// ---- accelerometer box: tilt so the axis reading +1g points up ----
+function updateBox([ax, ay, az]) {
+  const rotZ = -Math.atan2(ax, az) * 180 / Math.PI;                     // X-axis up/down
+  const rotX = -Math.atan2(ay, Math.hypot(ax, az)) * 180 / Math.PI;     // Y-axis toward/away
+  $('box').style.transform = `rotateX(-20deg) rotateX(${rotX}deg) rotateZ(${rotZ}deg)`;
+}
+
+// ---- gyroscope wheels: integrate rate into an angle so speed is visible ----
+const wheelAngle = [0, 0, 0];
+AXES.forEach((axis, i) => {
+  $('wheels').insertAdjacentHTML('beforeend',
+    `<div class="wheel" style="--c:${COLORS[i]}"><svg viewBox="0 0 76 76">
+       <circle class="disc" cx="38" cy="38" r="34"/>
+       <line class="mark" x1="38" y1="38" x2="38" y2="10" id="wheel${i}" style="transform-origin:38px 38px"/>
+     </svg>around ${axis}</div>`);
+});
+let lastGyroT = null;
+function updateWheels(gyr, t) {
+  const dt = lastGyroT === null ? 0 : (t - lastGyroT) / 1000;
+  lastGyroT = t;
+  gyr.forEach((dps, i) => {
+    wheelAngle[i] = (wheelAngle[i] + dps * dt) % 360;
+    $('wheel' + i).style.transform = `rotate(${wheelAngle[i]}deg)`;
+  });
+}
+
+// ---- magnetometer compass: heading in the sensor's X/Y plane ----
+function updateCompass([mx, my]) {
+  const heading = Math.atan2(my, mx) * 180 / Math.PI;
+  $('needle').style.transform = `rotate(${90 - heading}deg)`;
+}
+
+// ---- movement: strip gravity, then drive a spring-loaded ball with what's left ----
+const gravity = [0, 0, 1000], vel = [0, 0, 0], pos = [0, 0, 0];
+let lastMoveT = null, dirHoldUntil = 0, dirTimer = null;
+const DIR_NAMES = [['← LEFT', '→ RIGHT'], ['↓ BACK', '↑ FORWARD'], ['↓ DOWN', '↑ UP']];
+function updateMovement(acc, t) {
+  const dt = lastMoveT === null ? 0.02 : Math.min((t - lastMoveT) / 1000, 0.1);
+  lastMoveT = t;
+  const lin = acc.map((a, i) => {
+    gravity[i] += (a - gravity[i]) * 0.03;          // slow low-pass = gravity estimate
+    const l = a - gravity[i];
+    return Math.abs(l) < 40 ? 0 : l;                // deadband hides sensor noise
+  });
+  updateReadout('lin', lin);
+
+  // Spring + damper: the push kicks the ball, it drifts back to center.
+  lin.forEach((l, i) => {
+    const a = l / 1000 * 9.81;                      // mg -> m/s^2
+    vel[i] += (a - 60 * pos[i] - 10 * vel[i]) * dt;
+    pos[i] += vel[i] * dt;
+  });
+  const px = Math.max(-1, Math.min(1, pos[0] / 0.12)) * 95;
+  const py = Math.max(-1, Math.min(1, pos[2] / 0.12)) * 95;
+  const scale = 1 + Math.max(-0.6, Math.min(1.2, pos[1] / 0.12));
+  $('ball').style.transform = `translate(calc(-50% + ${px}px), calc(-50% - ${py}px)) scale(${scale})`;
+
+  // Direction flash: first axis to exceed the threshold wins, then ignore the stop-pulse for a moment.
+  if (t > dirHoldUntil) {
+    let best = 0, bestIdx = -1;
+    lin.forEach((l, i) => { if (Math.abs(l) > 250 && Math.abs(l) > best) { best = Math.abs(l); bestIdx = i; } });
+    if (bestIdx >= 0) {
+      const el = $('dir');
+      el.textContent = DIR_NAMES[bestIdx][lin[bestIdx] > 0 ? 1 : 0];
+      el.style.color = COLORS[bestIdx];
+      el.classList.add('show');
+      clearTimeout(dirTimer);
+      dirTimer = setTimeout(() => el.classList.remove('show'), 900);
+      dirHoldUntil = t + 500;
+    }
+  }
+}
+
+// ---- scrolling traces with hover tooltip ----
+const traces = [...document.querySelectorAll('.trace')].map((card) => {
+  const canvas = card.querySelector('canvas'), tip = card.querySelector('.tip');
+  const group = canvas.dataset.group;
+  canvas.addEventListener('mousemove', (e) => {
+    if (!history.length) return;
+    const r = canvas.getBoundingClientRect();
+    const t = history[history.length - 1].t - HISTORY_MS * (1 - (e.clientX - r.left) / r.width);
+    let best = history[0];
+    for (const h of history) if (Math.abs(h.t - t) < Math.abs(best.t - t)) best = h;
+    tip.style.display = 'block';
+    tip.style.left = Math.min(e.clientX - r.left + 12, r.width - 130) + 'px';
+    tip.style.top = (e.clientY - r.top + canvas.offsetTop - 30) + 'px';
+    tip.innerHTML = AXES.map((a, i) => `${a} ${best[group][i].toFixed(1)}`).join(' &nbsp; ');
+  });
+  canvas.addEventListener('mouseleave', () => tip.style.display = 'none');
+  return { canvas, group, range: +canvas.dataset.range };
+});
+function drawTraces() {
+  const css = getComputedStyle(document.documentElement);
+  const colors = ['--x', '--y', '--z'].map((v) => css.getPropertyValue(v).trim());
+  const grid = css.getPropertyValue('--grid').trim(), ink = css.getPropertyValue('--text-2').trim();
+  const now = history.length ? history[history.length - 1].t : 0;
+  for (const { canvas, group, range } of traces) {
+    const W = canvas.width = canvas.clientWidth * devicePixelRatio;
+    const H = canvas.height = canvas.clientHeight * devicePixelRatio;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    // zero line + range gridlines
+    ctx.strokeStyle = grid; ctx.lineWidth = devicePixelRatio;
+    for (const f of [0.25, 0.5, 0.75]) { ctx.beginPath(); ctx.moveTo(0, H * f); ctx.lineTo(W, H * f); ctx.stroke(); }
+    ctx.fillStyle = ink; ctx.font = `${11 * devicePixelRatio}px system-ui`;
+    ctx.fillText(`+${range}`, 4 * devicePixelRatio, 12 * devicePixelRatio);
+    ctx.fillText('0', 4 * devicePixelRatio, H / 2 - 3 * devicePixelRatio);
+    ctx.fillText(`−${range}`, 4 * devicePixelRatio, H - 4 * devicePixelRatio);
+    ctx.lineWidth = 2 * devicePixelRatio; ctx.lineJoin = 'round';
+    for (let i = 0; i < 3; i++) {
+      ctx.strokeStyle = colors[i]; ctx.beginPath();
+      history.forEach((h, k) => {
+        const x = W * (1 - (now - h.t) / HISTORY_MS);
+        const y = H / 2 - Math.max(-1, Math.min(1, h[group][i] / range)) * (H / 2 - 4);
+        k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+  }
+}
+
+// ---- sample ingestion ----
+function pushSample(acc, gyr, mag) {
+  const t = performance.now();
+  history.push({ t, acc, gyr, mag });
+  while (history.length && history[0].t < t - HISTORY_MS) history.shift();
+  updateReadout('acc', acc); updateReadout('gyr', gyr); updateReadout('mag', mag);
+  updateBox(acc); updateWheels(gyr, t); updateCompass(mag); updateMovement(acc, t);
+}
+(function frame() { drawTraces(); requestAnimationFrame(frame); })();
+
+// A data line from the sketch is exactly nine numbers; header/status lines have letters.
+function handleLine(line) {
+  $('raw').textContent = line.trim().slice(0, 80);
+  if (/[a-zA-Z]/.test(line)) return;
+  const nums = line.match(/-?\d+(\.\d+)?/g);
+  if (!nums || nums.length !== 9) return;
+  const v = nums.map(Number);
+  pushSample(v.slice(0, 3), v.slice(3, 6), v.slice(6, 9));
+}
+
+// ---- Web Serial ----
+let port = null;
+$('connect').addEventListener('click', async () => {
+  if (!('serial' in navigator)) {
+    $('status').textContent = 'Web Serial not available — use Chrome or Edge.';
+    return;
+  }
+  if (port) { await port.close().catch(() => {}); port = null; return; }
+  try {
+    stopSim();
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    $('status').textContent = 'Connected — move the sensor.';
+    $('connect').textContent = 'Disconnect';
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    const reader = decoder.readable.getReader();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      const lines = buf.split('\n'); buf = lines.pop();
+      lines.forEach(handleLine);
+    }
+  } catch (e) {
+    $('status').textContent = 'Error: ' + e.message;
+  } finally {
+    port = null;
+    $('connect').textContent = 'Connect (USB)';
+  }
+});
+
+// ---- Simulator: a sensor slowly rocking and turning, so the page can be tried without hardware ----
+let simTimer = null;
+function stopSim() { clearInterval(simTimer); simTimer = null; $('simulate').textContent = 'Simulate'; }
+$('simulate').addEventListener('click', () => {
+  if (simTimer) return stopSim();
+  $('simulate').textContent = 'Stop simulating';
+  $('status').textContent = 'Simulating fake data.';
+  let t = 0, prevPitch = 0, prevRoll = 0, prevYaw = 0, jab = null, jabLeft = 0;
+  simTimer = setInterval(() => {
+    t += 0.05;
+    // every ~2 s, shove the sensor along one axis: a push, then the matching stop
+    if (jabLeft === 0 && Math.random() < 0.025) { jab = [Math.floor(Math.random() * 3), Math.random() < 0.5 ? -1 : 1]; jabLeft = 6; }
+    const push = [0, 0, 0];
+    if (jabLeft > 0) { push[jab[0]] = jab[1] * (jabLeft > 3 ? 1500 : -1500); jabLeft--; }
+    const pitch = 0.6 * Math.sin(t * 0.7), roll = 0.4 * Math.sin(t * 1.1), yaw = t * 0.3;
+    const n = () => (Math.random() - 0.5) * 20;
+    const acc = [1000 * Math.sin(pitch) + push[0] + n(), -1000 * Math.sin(roll) * Math.cos(pitch) + push[1] + n(), 1000 * Math.cos(roll) * Math.cos(pitch) + push[2] + n()];
+    const gyr = [(roll - prevRoll) / 0.05 * 57.3, (pitch - prevPitch) / 0.05 * 57.3, (yaw - prevYaw) / 0.05 * 57.3].map((v) => v + n() / 10);
+    const mag = [40 * Math.cos(yaw) + n() / 10, 40 * Math.sin(yaw) + n() / 10, -30 + n() / 10];
+    prevPitch = pitch; prevRoll = roll; prevYaw = yaw;
+    handleLine(acc.concat(gyr, mag).map((v) => v.toFixed(1)).join('\t'));
+  }, 50);
+});
+</script>
+</body>
+</html>

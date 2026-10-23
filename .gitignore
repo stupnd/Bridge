@@ -4,3 +4,7 @@ node_modules
 *.whl
 *.onnx
 *.onnx.json
+.vercel
+.env*
+
+!.env.example

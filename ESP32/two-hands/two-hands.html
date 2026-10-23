@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two-Hand Orientation</title>
+<!--
+  Live view of two ICM-20948 sensors (one per hand) driven by two-hands.ino.
+  Open in Chrome, close the Arduino Serial Monitor, click Connect.
+  Click "Simulate" to try it without hardware.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f2; --surface: #fcfcfb; --border: #e2e1dc;
+    --text: #0b0b0b; --text-2: #52514e; --grid: #ebeae6;
+    --left: #2a78d6; --right: #eb6834; --ok: #1baf7a;
+    --x: #2a78d6; --y: #eb6834; --z: #1baf7a;
+    --plate: rgba(42,120,214,.20); --plate-r: rgba(235,104,52,.20);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #111110; --surface: #1a1a19; --border: #2c2c2a;
+      --text: #ffffff; --text-2: #c3c2b7; --grid: #262624;
+      --left: #3987e5; --right: #d95926; --ok: #199e70;
+      --x: #3987e5; --y: #d95926; --z: #199e70;
+      --plate: rgba(57,135,229,.22); --plate-r: rgba(217,89,38,.22);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 2px; }
+  h3 { font-size: 13px; margin: 0; color: var(--text-2); font-weight: 600; }
+  p { margin: 0; color: var(--text-2); }
+  .topbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+           background: var(--surface); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--left); border-color: var(--left); color: #fff; }
+  .status { color: var(--text-2); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+         margin-right: 5px; }
+  .dot.live { background: var(--ok); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+          display: flex; flex-direction: column; gap: 10px; }
+  .note { font-size: 12px; }
+  .note b { color: var(--text); }
+  .section-title { margin: 20px 0 10px; font-size: 15px; font-weight: 600; }
+
+  /* 3D hand */
+  .scene { height: 210px; perspective: 700px; display: flex; align-items: center; justify-content: center;
+           position: relative; }
+  .axislbl { position: absolute; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 600;
+             color: var(--text-2); letter-spacing: .04em; }
+  .axislbl.top { top: 4px; }
+  .axislbl.bottom { bottom: 4px; }
+  .world { width: 170px; height: 170px; position: relative; transform-style: preserve-3d;
+           transform: rotateX(-62deg); }
+  .floor { position: absolute; inset: -14px; border: 1px dashed var(--border); border-radius: 8px; }
+  .hand { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 60ms linear; }
+  /* The hand drawing lies flat in the floor plane; the normal sticks out of it. */
+  .palmplane { position: absolute; inset: 0; transform: rotateX(90deg); }
+  .handsvg { width: 100%; height: 100%; overflow: visible; }
+  .handsvg .hs { fill: var(--pc); stroke: var(--c); stroke-width: 3; stroke-linejoin: round; }
+  .handsvg .mirror { transform: scaleX(-1); transform-origin: 50px 50px; }
+  .handsvg text { fill: var(--c); font: 700 15px system-ui; text-anchor: middle; }
+  .normal { position: absolute; left: 50%; top: 50%; width: 3px; height: 46px; background: var(--c);
+            transform: translateX(-50%); opacity: .8; border-radius: 2px; }
+  .normal::after { content: ""; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%);
+                   border: 5px solid transparent; border-top-color: var(--c); }
+
+  /* value rows */
+  .readout { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center;
+             font-variant-numeric: tabular-nums; font-size: 13px; }
+  .readout .lbl { color: var(--text-2); }
+  .readout .axis { font-weight: 600; }
+  .readout .axis::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px;
+                           margin-right: 6px; vertical-align: -1px; background: var(--c); }
+  .bar { position: relative; height: 8px; background: var(--grid); border-radius: 4px; }
+  .bar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); }
+  .bar i { position: absolute; top: 0; bottom: 0; background: var(--c); border-radius: 4px; }
+  .readout .val { min-width: 58px; text-align: right; color: var(--text-2); }
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group + .group { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+
+  /* relationship panel */
+  .rel { margin-top: 14px; }
+  .rel .headline { font-size: 26px; font-weight: 700; line-height: 1.2; }
+  .rel .sub { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+  .relgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 12px; }
+  .stat { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .stat .k { font-size: 12px; color: var(--text-2); }
+  .stat .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+  /* calibration bar */
+  .calbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px;
+            background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .calbar.warn { border-color: var(--y); }
+  .calbar .msg { flex: 1; min-width: 220px; font-size: 13px; }
+  .calbar .msg b { color: var(--text); }
+  .calbar .count { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 54px;
+                   text-align: center; color: var(--left); }
+
+  /* traces */
+  .traces { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .trace canvas { width: 100%; height: 130px; display: block; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); }
+  .legend span::before { content: ""; display: inline-block; width: 12px; height: 3px; border-radius: 2px;
+                         margin-right: 5px; vertical-align: 3px; background: var(--c); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Two-Hand Orientation</h1>
+  <button class="primary" id="connect">Connect (USB)</button>
+  <button id="simulate">Simulate</button>
+  <span class="status"><span class="dot" id="dotL"></span>left</span>
+  <span class="status"><span class="dot" id="dotR"></span>right</span>
+  <span class="status" id="status">Not connected. Close the Arduino Serial Monitor first.</span>
+</div>
+
+<div class="calbar warn" id="calbar">
+  <span class="count" id="calCount" hidden></span>
+  <span class="msg" id="calMsg"><b>Not calibrated.</b> Lay both sensors flat the way they sit on the hands, palms down and
+    fingers forward, then click Calibrate. This teaches the page how your sensors are mounted — without it the plates
+    can appear flipped and the direction labels will be wrong.</span>
+  <button class="primary" id="calBtn">Calibrate</button>
+  <button id="calMagBtn">Calibrate compass</button>
+  <label style="font-size:13px; display:flex; align-items:center; gap:6px; white-space:nowrap">
+    <input type="checkbox" id="useCompass"> use compass for heading
+  </label>
+  <button id="calClearBtn" hidden>Clear</button>
+</div>
+
+<div class="cards">
+  <div class="card" style="--c:var(--left); --pc:var(--plate)">
+    <h2>Left hand <span style="color:var(--text-2);font-weight:400">— sensor at 0x68</span></h2>
+    <div class="scene">
+      <span class="axislbl top">forward</span>
+      <span class="axislbl bottom">back</span>
+      <div class="world">
+      <div class="floor"></div>
+      <div class="hand" id="handL">
+        <div class="palmplane">
+          <svg class="handsvg" viewBox="0 0 100 100">
+            <g class="hs mirror">
+              <rect x="26" y="46" width="50" height="44" rx="13"/>
+              <rect x="29" y="20" width="10" height="30" rx="5"/>
+              <rect x="41" y="14" width="10" height="36" rx="5"/>
+              <rect x="53" y="18" width="10" height="32" rx="5"/>
+              <rect x="65" y="26" width="10" height="24" rx="5"/>
+              <rect x="10" y="50" width="10" height="26" rx="5" transform="rotate(-28 15 63)"/>
+            </g>
+            <text x="50" y="74">L</text>
+          </svg>
+        </div>
+        <div class="normal"></div>
+      </div>
+    </div></div>
+    <div class="readout" id="anglesL"></div>
+  </div>
+
+  <div class="card" style="--c:var(--right); --pc:var(--plate-r)">
+    <h2>Right hand <span style="color:var(--text-2);font-weight:400">— sensor at 0x69</span></h2>
+    <div class="scene">
+      <span class="axislbl top">forward</span>
+      <span class="axislbl bottom">back</span>
+      <div class="world">
+      <div class="floor"></div>
+      <div class="hand" id="handR">
+        <div class="palmplane">
+          <svg class="handsvg" viewBox="0 0 100 100">
+            <g class="hs">
+              <rect x="26" y="46" width="50" height="44" rx="13"/>
+              <rect x="29" y="20" width="10" height="30" rx="5"/>
+              <rect x="41" y="14" width="10" height="36" rx="5"/>
+              <rect x="53" y="18" width="10" height="32" rx="5"/>
+              <rect x="65" y="26" width="10" height="24" rx="5"/>
+              <rect x="10" y="50" width="10" height="26" rx="5" transform="rotate(-28 15 63)"/>
+            </g>
+            <text x="50" y="74">R</text>
+          </svg>
+        </div>
+        <div class="normal"></div>
+      </div>
+    </div></div>
+    <div class="readout" id="anglesR"></div>
+  </div>
+</div>
+
+<div class="card rel">
+  <h2>How the hands relate</h2>
+  <div class="headline" id="relHeadline">—</div>
+  <div class="sub" id="relSub">Waiting for data.</div>
+  <div class="relgrid">
+    <div class="stat"><div class="k">Angle between palms</div><div class="v" id="statAngle">—</div></div>
+    <div class="stat"><div class="k">Left palm points</div><div class="v" id="statL">—</div></div>
+    <div class="stat"><div class="k">Right palm points</div><div class="v" id="statR">—</div></div>
+    <div class="stat"><div class="k">Heading difference</div><div class="v" id="statYaw">—</div></div>
+  </div>
+</div>
+
+<div class="section-title">What each sensor is reading</div>
+<div class="cards">
+  <div class="card"><h2 style="color:var(--left)">Left hand</h2><div id="rawL"></div></div>
+  <div class="card"><h2 style="color:var(--right)">Right hand</h2><div id="rawR"></div></div>
+</div>
+
+<div class="section-title">Left vs right, last 10 seconds</div>
+<div class="traces">
+  <div class="card trace">
+    <h3>Total acceleration (mg) — ~1000 at rest</h3>
+    <div class="legend"><span style="--c:var(--left)">left</span><span style="--c:var(--right)">right</span></div>
+    <canvas data-kind="acc" data-max="2500"></canvas>
+  </div>
+  <div class="card trace">
+    <h3>Turning speed (dps) — 0 when still</h3>
+    <div class="legend"><span style="--c:var(--left)">left</span><span style="--c:var(--right)">right</span></div>
+    <canvas data-kind="gyr" data-max="500"></canvas>
+  </div>
+  <div class="card trace">
+    <h3>Magnetic field (µT) — roughly constant</h3>
+    <div class="legend"><span style="--c:var(--left)">left</span><span style="--c:var(--right)">right</span></div>
+    <canvas data-kind="mag" data-max="120"></canvas>
+  </div>
+</div>
+
+<p class="note" style="margin-top:14px">Move one hand at a time and watch only that hand's lines react — that's the two sensors
+  working independently on the same two wires. These are all <b>orientation</b> and <b>motion</b> measurements: which way each palm
+  faces and how fast it's turning. An IMU cannot tell you <b>where</b> a hand is — position needs double-integrating acceleration,
+  which drifts to meters of error within seconds. For ASL that's usually fine: palm orientation, handshape and movement carry most
+  of the signal. Body-relative location would need a camera, or more IMUs up the arm so limb angles give position by geometry.</p>
+
+<script>
+const DEG = 180 / Math.PI;
+const $ = (id) => document.getElementById(id);
+
+// The ICM-20948's magnetometer die sits rotated relative to the accel/gyro axes,
+// so its readings need remapping before they agree with accel. Flip these if
+// heading comes out wrong for your board.
+const magToAccel = ([mx, my, mz]) => [my, mx, -mz];
+const magnitude = (v) => Math.hypot(v[0], v[1], v[2]);
+
+// ---- orientation ----
+// Roll/pitch come from which way gravity points; yaw needs the magnetometer
+// tilted back level first.
+// Gravity alone gives roll and pitch, and it is rock steady. Yaw needs the
+// magnetometer, which is only trustworthy once the compass has been calibrated —
+// in a distorted field it swings wildly and drags the whole hand around with it.
+// So yaw is left at zero unless the user opts in.
+function orientation(acc, mag) {
+  const [ax, ay, az] = acc;
+  const roll  = Math.atan2(ay, az);
+  const pitch = Math.atan2(-ax, Math.hypot(ay, az));
+  if (!useCompass()) return { roll, pitch, yaw: 0 };
+  const [mx, my, mz] = magToAccel(mag);
+  const cr = Math.cos(roll), sr = Math.sin(roll), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const hx = mx * cp + mz * sp;
+  const hy = mx * sr * sp + my * cr - mz * sr * cp;
+  return { roll, pitch, yaw: Math.atan2(-hy, hx) };
+}
+
+// R = Rz(yaw) Ry(pitch) Rx(roll): sensor frame -> world (X right, Y forward, Z up).
+function rotMatrix({ roll, pitch, yaw }) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const cr = Math.cos(roll), sr = Math.sin(roll);
+  return [
+    [cy*cp, cy*sp*sr - sy*cr, cy*sp*cr + sy*sr],
+    [sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr],
+    [-sp,   cp*sr,            cp*cr],
+  ];
+}
+
+// CSS draws with y down and z toward the viewer, so the world matrix is
+// conjugated by P (world -> CSS) before becoming a matrix3d.
+const P = [[1,0,0],[0,0,-1],[0,1,0]];
+const mul = (A, B) => A.map((r) => B[0].map((_, j) => r.reduce((s, v, k) => s + v * B[k][j], 0)));
+const transpose = (A) => A[0].map((_, j) => A.map((r) => r[j]));
+function css3d(R) {
+  const M = mul(mul(P, R), transpose(P));
+  return `matrix3d(${M[0][0]},${M[1][0]},${M[2][0]},0,` +
+                  `${M[0][1]},${M[1][1]},${M[2][1]},0,` +
+                  `${M[0][2]},${M[1][2]},${M[2][2]},0, 0,0,0,1)`;
+}
+
+function describe([x, y, z]) {
+  const abs = [Math.abs(x), Math.abs(y), Math.abs(z)];
+  const i = abs.indexOf(Math.max(...abs));
+  if (i === 2) return z > 0 ? 'up' : 'down';
+  if (i === 1) return y > 0 ? 'forward' : 'back';
+  return x > 0 ? 'right' : 'left';
+}
+
+// ---- calibration ----
+// Sensors get mounted at whatever angle is convenient, so the page cannot assume
+// which way is up. Calibration records, per hand:
+//   Rref       the orientation while lying flat, so "flat" displays as flat
+//   gyroBias   what the gyro reads when still, which should be zero
+//   accelScale a correction so total acceleration at rest is 1 g
+//   magOffset  hard-iron offset from nearby metal (optional second step)
+const IDENTITY = [[1,0,0],[0,1,0],[0,0,1]];
+const useCompass = () => $('useCompass').checked;
+let cal = { L: null, R: null };
+
+try {
+  const saved = localStorage.getItem('twoHandCal');
+  if (saved) cal = JSON.parse(saved);
+} catch (e) { /* private window or blocked storage — calibrate again this session */ }
+
+const calibrated = () => cal.L && cal.R;
+function saveCal() {
+  try { localStorage.setItem('twoHandCal', JSON.stringify(cal)); } catch (e) { /* not fatal */ }
+}
+
+// Applies whatever calibration exists. Missing calibration = pass-through.
+function correct(side, acc, gyr, mag) {
+  const c = cal[side];
+  if (!c) return { acc, gyr, mag, Rref: IDENTITY };
+  return {
+    acc: acc.map((v) => v * c.accelScale),
+    gyr: gyr.map((v, i) => v - c.gyroBias[i]),
+    mag: mag.map((v, i) => v - (c.magOffset ? c.magOffset[i] : 0)),
+    Rref: c.Rref,
+  };
+}
+
+// Collection state for a calibration run in progress.
+let collecting = null; // { mode:'still'|'mag', until, samples:{L:[],R:[]} }
+
+function startCollect(mode, seconds, message) {
+  collecting = { mode, until: performance.now() + seconds * 1000, samples: { L: [], R: [] } };
+  $('calbar').classList.remove('warn');
+  $('calMsg').innerHTML = message;
+  $('calCount').hidden = false;
+  $('calBtn').disabled = $('calMagBtn').disabled = true;
+}
+
+function finishCollect() {
+  const mode = collecting.mode, samples = collecting.samples;
+  collecting = null;
+  $('calCount').hidden = true;
+  $('calBtn').disabled = $('calMagBtn').disabled = false;
+
+  for (const side of ['L', 'R']) {
+    const rows = samples[side];
+    if (rows.length < 3) continue; // that hand wasn't reporting
+
+    if (mode === 'still') {
+      const mean = (pick) => [0, 1, 2].map((i) => rows.reduce((s, r) => s + pick(r)[i], 0) / rows.length);
+      const acc = mean((r) => r.acc), gyr = mean((r) => r.gyr), mag = mean((r) => r.mag);
+      const magnitudeAtRest = magnitude(acc);
+      cal[side] = {
+        gyroBias: gyr,
+        accelScale: magnitudeAtRest > 100 ? 1000 / magnitudeAtRest : 1,
+        Rref: rotMatrix(orientation(acc, mag)),
+        magOffset: cal[side] ? cal[side].magOffset : null, // keep any compass calibration
+      };
+    } else { // 'mag': hard-iron offset is the midpoint of each axis's swing
+      if (!cal[side]) continue;
+      const axis = (i) => rows.map((r) => r.mag[i]);
+      cal[side].magOffset = [0, 1, 2].map((i) => {
+        const vals = axis(i);
+        return (Math.min(...vals) + Math.max(...vals)) / 2;
+      });
+    }
+  }
+  saveCal();
+  showCalStatus();
+  if (!calibrated()) {
+    $('calbar').classList.add('warn');
+    $('calMsg').innerHTML = '<b>Calibration got no data.</b> Connect the board (or press Simulate) so readings are ' +
+      'arriving, then click Calibrate again.';
+  }
+}
+
+function showCalStatus() {
+  const bar = $('calbar');
+  if (!calibrated()) {
+    bar.classList.add('warn');
+    $('calMsg').innerHTML = '<b>Not calibrated.</b> Lay both sensors flat the way they sit on the hands, palms down and ' +
+      'fingers forward, then click Calibrate.';
+    $('calClearBtn').hidden = true;
+    return;
+  }
+  bar.classList.remove('warn');
+  const hasMag = cal.L.magOffset && cal.R.magOffset;
+  const drift = ['L', 'R'].map((s) => magnitude(cal[s].gyroBias).toFixed(1)).join(' / ');
+  const scale = ['L', 'R'].map((s) => (cal[s].accelScale * 100).toFixed(0) + '%').join(' / ');
+  $('calMsg').innerHTML = `<b>Calibrated.</b> Gyro drift removed (left/right: ${drift} dps) · ` +
+    `accel scaled to ${scale} · compass ${hasMag ? 'calibrated' : '<b>not</b> calibrated — headings may be off'}.`;
+  $('calClearBtn').hidden = false;
+}
+
+$('calBtn').addEventListener('click', () => startCollect('still', 3,
+  '<b>Hold still.</b> Both sensors flat, palms down, fingers pointing the same way — don\'t move them.'));
+$('calMagBtn').addEventListener('click', () => {
+  if (!calibrated()) { startCollect('still', 3, '<b>Hold still first.</b> Flat, palms down.'); return; }
+  startCollect('mag', 12, '<b>Now rotate both sensors slowly</b> through every orientation — figure-eights in the air, ' +
+    'turning them over as you go. This finds the magnetic distortion from nearby metal.');
+});
+$('useCompass').addEventListener('change', () => {
+  // Rref was measured in whichever mode was active, so it has to be remeasured.
+  if (calibrated()) startCollect('still', 3,
+    '<b>Hold still.</b> Heading mode changed, so the flat reference is being remeasured.');
+  showHeadingStat();
+});
+$('calClearBtn').addEventListener('click', () => {
+  cal = { L: null, R: null };
+  try { localStorage.removeItem('twoHandCal'); } catch (e) { /* ignore */ }
+  showCalStatus();
+});
+function showHeadingStat() {
+  if (!useCompass()) $('statYaw').textContent = 'compass off';
+}
+showCalStatus();
+showHeadingStat();
+
+// ---- build the readout rows ----
+const AXES = ['X', 'Y', 'Z'];
+const AXIS_COLORS = ['var(--x)', 'var(--y)', 'var(--z)'];
+const GROUPS = [
+  { key: 'acc', title: 'Accelerometer — which way is down (mg)', range: 1500 },
+  { key: 'gyr', title: 'Gyroscope — how fast it turns (dps)',    range: 360 },
+  { key: 'mag', title: 'Magnetometer — where north is (µT)',     range: 80 },
+];
+for (const side of ['L', 'R']) {
+  // roll / pitch / yaw under each 3D plate
+  const angles = $('angles' + side);
+  for (const name of ['roll', 'pitch', 'yaw']) {
+    angles.insertAdjacentHTML('beforeend',
+      `<span class="lbl">${name}</span><div class="bar"><i></i></div><span class="val">—</span>`);
+  }
+  // the nine raw values, grouped by sensor
+  const raw = $('raw' + side);
+  for (const g of GROUPS) {
+    const rows = AXES.map((axis, i) =>
+      `<span class="axis" style="--c:${AXIS_COLORS[i]}">${axis}</span>` +
+      `<div class="bar" style="--c:${AXIS_COLORS[i]}"><i></i></div><span class="val">0.0</span>`).join('');
+    raw.insertAdjacentHTML('beforeend',
+      `<div class="group"><h3>${g.title}</h3><div class="readout" data-group="${g.key}">${rows}</div></div>`);
+  }
+}
+
+// Fills one row set: centered bars, so zero sits in the middle.
+function fillRows(el, values, range, suffix = '') {
+  const bars = el.querySelectorAll('.bar i'), vals = el.querySelectorAll('.val');
+  values.forEach((v, i) => {
+    const frac = Math.max(-1, Math.min(1, v / range)) * 50;
+    bars[i].style.left = (frac < 0 ? 50 + frac : 50) + '%';
+    bars[i].style.width = Math.abs(frac) + '%';
+    vals[i].textContent = v.toFixed(v === Math.round(v) ? 0 : 1) + suffix;
+  });
+}
+
+function renderHand(side, rawAcc, rawGyr, rawMag) {
+  const { acc, gyr, mag, Rref } = correct(side, rawAcc, rawGyr, rawMag);
+  const o = orientation(acc, mag);
+  // D is how far the hand has turned from its calibrated flat pose, so a hand
+  // lying flat shows as flat no matter how its sensor happens to be mounted.
+  const D = mul(rotMatrix(o), transpose(Rref));
+  $('hand' + side).style.transform = css3d(D);
+
+  const angles = [Math.atan2(D[2][1], D[2][2]), Math.asin(-Math.max(-1, Math.min(1, D[2][0]))), Math.atan2(D[1][0], D[0][0])];
+  fillRows($('angles' + side), angles.map((a) => a * DEG), 180, '°');
+
+  const shown = { acc, gyr, mag };
+  const raw = $('raw' + side);
+  for (const g of GROUPS) fillRows(raw.querySelector(`[data-group="${g.key}"]`), shown[g.key], g.range);
+
+  // At the calibrated pose the palm faces down, so the palm normal is -D's third column.
+  return { angles, normal: [-D[0][2], -D[1][2], -D[2][2]], gyr };
+}
+
+function renderRelationship(L, R) {
+  const dot = Math.max(-1, Math.min(1, L.normal.reduce((s, v, i) => s + v * R.normal[i], 0)));
+  const angle = Math.acos(dot) * DEG;
+  let yawDiff = (R.angles[2] - L.angles[2]) * DEG;
+  while (yawDiff > 180) yawDiff -= 360;
+  while (yawDiff < -180) yawDiff += 360;
+
+  const dirL = describe(L.normal), dirR = describe(R.normal);
+  $('statAngle').textContent = angle.toFixed(0) + '°';
+  $('statL').textContent = dirL;
+  $('statR').textContent = dirR;
+  $('statYaw').textContent = useCompass() ? yawDiff.toFixed(0) + '°' : 'compass off';
+
+  let headline, sub;
+  if (angle > 150) {
+    headline = 'Palms facing each other';
+    sub = 'The palms point in opposite directions — a clap, a two-handed sign, hands framing something.';
+  } else if (angle < 30) {
+    headline = 'Palms facing the same way';
+    sub = `Both palms point ${dirL}. The hands are parallel — stacked, side by side, or one behind the other.`;
+  } else if (angle > 60 && angle < 120) {
+    headline = 'Palms perpendicular';
+    sub = `Left points ${dirL}, right points ${dirR} — one hand is square to the other.`;
+  } else {
+    headline = 'Palms at an angle';
+    sub = `Left points ${dirL}, right points ${dirR}.`;
+  }
+  $('relHeadline').textContent = headline;
+  $('relSub').textContent = sub;
+}
+
+// ---- traces: one line per hand, so you can see them move independently ----
+const HISTORY_MS = 10000;
+const history = []; // { t, L:{acc,gyr,mag magnitudes}, R:{...} }
+const traces = [...document.querySelectorAll('.trace canvas')].map((canvas) => (
+  { canvas, kind: canvas.dataset.kind, max: +canvas.dataset.max }));
+
+function drawTraces() {
+  const css = getComputedStyle(document.documentElement);
+  const colL = css.getPropertyValue('--left').trim(), colR = css.getPropertyValue('--right').trim();
+  const grid = css.getPropertyValue('--grid').trim(), ink = css.getPropertyValue('--text-2').trim();
+  const now = history.length ? history[history.length - 1].t : 0;
+  for (const { canvas, kind, max } of traces) {
+    const W = canvas.width = canvas.clientWidth * devicePixelRatio;
+    const H = canvas.height = canvas.clientHeight * devicePixelRatio;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = grid; ctx.lineWidth = devicePixelRatio;
+    for (const f of [0.25, 0.5, 0.75]) { ctx.beginPath(); ctx.moveTo(0, H * f); ctx.lineTo(W, H * f); ctx.stroke(); }
+    ctx.fillStyle = ink; ctx.font = `${11 * devicePixelRatio}px system-ui`;
+    ctx.fillText(String(max), 4 * devicePixelRatio, 12 * devicePixelRatio);
+    ctx.fillText('0', 4 * devicePixelRatio, H - 4 * devicePixelRatio);
+
+    ctx.lineWidth = 2 * devicePixelRatio; ctx.lineJoin = 'round';
+    for (const [side, color] of [['L', colL], ['R', colR]]) {
+      ctx.strokeStyle = color; ctx.beginPath();
+      let started = false;
+      for (const h of history) {
+        if (!h[side]) { started = false; continue; } // hand offline: break the line
+        const x = W * (1 - (now - h.t) / HISTORY_MS);
+        const y = H - Math.max(0, Math.min(1, h[side][kind] / max)) * (H - 4);
+        started ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        started = true;
+      }
+      ctx.stroke();
+    }
+  }
+}
+(function frame() { drawTraces(); requestAnimationFrame(frame); })();
+
+// ---- ingest ----
+let liveL = false, liveR = false;
+function handleLine(line) {
+  if (/[a-zA-Z]/.test(line)) return;
+  const nums = line.match(/-?\d+(\.\d+)?/g);
+  if (!nums || nums.length !== 18) return;
+  const v = nums.map(Number);
+  const hands = {
+    L: { acc: v.slice(0, 3),  gyr: v.slice(3, 6),   mag: v.slice(6, 9) },
+    R: { acc: v.slice(9, 12), gyr: v.slice(12, 15), mag: v.slice(15, 18) },
+  };
+
+  // The sketch sends all-zero for a hand that isn't responding.
+  const ok = { L: hands.L.acc.some((n) => n !== 0), R: hands.R.acc.some((n) => n !== 0) };
+  if (ok.L !== liveL) { liveL = ok.L; $('dotL').classList.toggle('live', ok.L); }
+  if (ok.R !== liveR) { liveR = ok.R; $('dotR').classList.toggle('live', ok.R); }
+
+  // Feed a calibration run in progress, using raw values — corrections are what we're measuring.
+  if (collecting) {
+    for (const side of ['L', 'R']) if (ok[side]) collecting.samples[side].push(hands[side]);
+    const left = Math.ceil((collecting.until - performance.now()) / 1000);
+    $('calCount').textContent = Math.max(0, left);
+    if (performance.now() >= collecting.until) finishCollect();
+  }
+
+  const out = {};
+  for (const side of ['L', 'R']) {
+    if (!ok[side]) continue;
+    const { acc, gyr, mag } = hands[side];
+    out[side] = renderHand(side, acc, gyr, mag);
+  }
+
+  const t = performance.now();
+  history.push({
+    t,
+    L: ok.L ? { acc: magnitude(hands.L.acc), gyr: magnitude(hands.L.gyr), mag: magnitude(hands.L.mag) } : null,
+    R: ok.R ? { acc: magnitude(hands.R.acc), gyr: magnitude(hands.R.gyr), mag: magnitude(hands.R.mag) } : null,
+  });
+  while (history.length && history[0].t < t - HISTORY_MS) history.shift();
+
+  if (out.L && out.R) renderRelationship(out.L, out.R);
+  else {
+    $('relHeadline').textContent = '—';
+    $('relSub').textContent = !ok.L && !ok.R
+      ? 'Neither hand is reporting.'
+      : `Only the ${ok.L ? 'left' : 'right'} hand is reporting — check the other sensor's AD0 pin and wiring.`;
+  }
+}
+
+// ---- Web Serial ----
+let port = null;
+$('connect').addEventListener('click', async () => {
+  if (!('serial' in navigator)) {
+    $('status').textContent = 'Web Serial not available — use Chrome or Edge.';
+    return;
+  }
+  if (port) { await port.close().catch(() => {}); port = null; return; }
+  try {
+    stopSim();
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    $('status').textContent = 'Connected.';
+    $('connect').textContent = 'Disconnect';
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    const reader = decoder.readable.getReader();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      const lines = buf.split('\n'); buf = lines.pop();
+      lines.forEach(handleLine);
+    }
+  } catch (e) {
+    $('status').textContent = 'Error: ' + e.message;
+  } finally {
+    port = null;
+    $('connect').textContent = 'Connect (USB)';
+  }
+});
+
+// ---- simulator: two hands rotating and occasionally shaken, one at a time ----
+let simTimer = null;
+function stopSim() { clearInterval(simTimer); simTimer = null; $('simulate').textContent = 'Simulate'; }
+$('simulate').addEventListener('click', () => {
+  if (simTimer) return stopSim();
+  $('simulate').textContent = 'Stop simulating';
+  $('status').textContent = 'Simulating fake data.';
+  let t = 0;
+  // Build plausible accel/gyro/mag for a hand at a given orientation.
+  const fake = (roll, pitch, yaw, spin) => {
+    const R = rotMatrix({ roll, pitch, yaw });
+    const toSensor = (w) => [0, 1, 2].map((i) => R[0][i] * w[0] + R[1][i] * w[1] + R[2][i] * w[2]);
+    const noise = () => (Math.random() - 0.5) * 12;
+    const acc = toSensor([0, 0, 1000]).map((v) => v + noise());
+    const m = toSensor([20, 0, -40]).map((v) => v + noise() / 20);
+    const gyr = [spin * 60 + noise() / 4, spin * 20 + noise() / 4, spin * 35 + noise() / 4];
+    return { acc, gyr, mag: [m[1], m[0], -m[2]] }; // undo magToAccel so the page's remap is exercised
+  };
+  simTimer = setInterval(() => {
+    t += 0.05;
+    // Alternate which hand is being waved, so the traces visibly separate.
+    const phase = Math.floor(t / 4) % 2;
+    const swing = Math.sin(t * 0.5);
+    const L = fake(swing * 1.4, 0.2 * Math.sin(t * 0.9), 0.3 * Math.sin(t * 0.4), phase === 0 ? Math.sin(t * 6) : 0);
+    const R = fake(-swing * 1.4, 0.2 * Math.sin(t * 1.1), -0.3 * Math.sin(t * 0.4), phase === 1 ? Math.sin(t * 6) : 0);
+    handleLine([...L.acc, ...L.gyr, ...L.mag, ...R.acc, ...R.gyr, ...R.mag]
+      .map((v) => v.toFixed(1)).join('\t'));
+  }, 50);
+});
+</script>
+</body>
+</html>
