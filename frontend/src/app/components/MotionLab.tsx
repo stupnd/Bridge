@@ -112,7 +112,7 @@ export default function MotionLab({ recordings }: { recordings: Recording[] }) {
 
   return (
     <Card
-      title="4. Test the model"
+      title="Test the model"
       description="Recognizes signs by comparing the last few seconds from the glove with your recordings."
     >
       <div className="space-y-6">

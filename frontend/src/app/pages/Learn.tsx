@@ -6,7 +6,7 @@ import HandDiagram from "../components/HandDiagram";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../components/ui/dialog";
 import { ALPHABET, FINGER_NAMES, Letter, fingerHint, fingerMatches, getLetter, targetBends } from "../lib/asl";
 import { isLearned, letterProgress, recordPractice, recordQuiz, useLearnProgress } from "../lib/learnProgress";
-import { classify, nearestSample, useSignModel } from "../lib/signModel";
+import { nearestSample, useSignModel, useSmoothedClassification } from "../lib/signModel";
 
 type Tab = "alphabet" | "practice" | "quiz";
 const TABS: { id: Tab; label: string }[] = [
@@ -171,7 +171,9 @@ function PracticeTab({ letter, onLetter }: { letter: string; onLetter: (l: strin
   // Letters with recorded samples are checked by the same model Translate uses.
   // Others (J and Z, which move) fall back to the finger description.
   const sample = nearestSample(model, letter, bends);
-  const predicted = sample ? classify(model, bends).label : null;
+  const result = useSmoothedClassification(model, bends, connected && !!calibration);
+  const predicted = result.label;
+  const closest = result.ranked[0]?.label;
   const ok = sample
     ? sample.bends.map((b, i) => Math.abs(bends[i] - b) <= FINGER_TOLERANCE)
     : target.fingers.map((s, i) => fingerMatches(s, bends[i]));
@@ -213,8 +215,12 @@ function PracticeTab({ letter, onLetter }: { letter: string; onLetter: (l: strin
       : target.fingers.map((s, i) => fingerHint(s, bends[i], FINGER_NAMES[i]))
   ).filter((h): h is string => !!h);
   // Every finger is close, but the model still prefers a lookalike.
-  if (sample && !hints.length && predicted && predicted !== letter) {
-    hints.push(`Close! It reads as ${predicted}. Check your thumb.`);
+  if (sample && !hints.length && predicted !== letter && closest) {
+    hints.push(
+      closest === letter
+        ? `Almost: it could also be ${result.ranked[1]?.label}. Hold the shape more clearly.`
+        : `Close! It reads as ${closest}. Check your thumb.`
+    );
   }
 
   return (

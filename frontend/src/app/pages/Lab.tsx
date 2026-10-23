@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from "react";
-import { Download, Plus, RotateCcw, Shuffle, Upload, X } from "lucide-react";
+import { Database, Download, Plus, RotateCcw, Shuffle, Upload, X } from "lucide-react";
 import { useSensor } from "../context/SensorContext";
 import { Button, Card, GloveGate, Page, PageHeader } from "../components/common";
 import HandDiagram from "../components/HandDiagram";
+import TeachHand from "../components/TeachHand";
+import { loadCollectData } from "../lib/collectStorage";
 import { FINGER_NAMES } from "../lib/asl";
 import {
   classify,
@@ -13,6 +15,7 @@ import {
   parseSamplesCsv,
   resetModel,
   REST_LABEL,
+  samplesFromCollectData,
   samplesToCsv,
   setModel,
   SignModel,
@@ -85,6 +88,7 @@ export default function Lab() {
       </div>
 
       <div className="mt-6 space-y-6">
+        <TeachHand />
         <TrainingData model={model} bends={bends} />
         <RobustnessTest model={model} />
       </div>
@@ -105,7 +109,7 @@ function VirtualGlove({ bends, onChange, model }: { bends: number[]; onChange: (
 
   return (
     <div>
-      <div className="grid items-center gap-6 sm:grid-cols-[auto,1fr]">
+      <div className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
         <HandDiagram bends={bends} className="mx-auto w-36" label="Virtual hand" />
         <div className="space-y-3">
           {FINGER_NAMES.map((name, i) => (
@@ -176,17 +180,26 @@ function Prediction({ model, result }: { model: SignModel; result: ReturnType<ty
   return (
     <Card title="Prediction" description="Nearest recorded sample, measured as the average difference per finger.">
       <div className="flex items-center gap-6" aria-live="polite">
-        <span className={`w-24 text-center text-7xl font-semibold ${result.label ? "text-indigo-600" : "text-gray-200"}`}>
-          {result.label ?? "–"}
+        <span
+          className={`w-24 text-center text-7xl font-semibold ${
+            result.label ? "text-indigo-600" : result.status === "unsure" ? "text-amber-400" : "text-gray-200"
+          }`}
+        >
+          {result.label ?? (result.status === "unsure" ? `${result.ranked[0].label}?` : "–")}
         </span>
         <div className="text-sm">
-          {result.label ? (
+          {result.status === "letter" ? (
             <>
               <p className="text-gray-900">{Math.round(result.confidence * 100)}% sure</p>
               <p className="text-gray-500">How much closer it is than the next letter</p>
             </>
-          ) : closest?.label === REST_LABEL ? (
+          ) : result.status === "rest" ? (
             <p className="text-gray-600">Resting hand</p>
+          ) : result.status === "unsure" ? (
+            <p className="text-amber-700">
+              Unsure: {result.ranked[0].label} or {result.ranked[1].label}? Only{" "}
+              {Math.round(result.confidence * 100)}% sure, under the {pct(model.minConfidence)} minimum.
+            </p>
           ) : (
             <p className="text-gray-600">
               No letter: the closest ({closest?.label ?? "none"}) is {closest ? pct(closest.distance) : "–"} off,
@@ -224,7 +237,25 @@ function Prediction({ model, result }: { model: SignModel; result: ReturnType<ty
           onChange={(e) => setModel((m) => ({ ...m, maxDistance: Number(e.target.value) / 100 }))}
           className="w-full accent-indigo-600"
         />
-        <span className="text-xs text-gray-500">Lower is stricter. Also used by Translate and Learn.</span>
+        <span className="text-xs text-gray-500">Lower is stricter.</span>
+      </label>
+
+      <label className="mt-4 block">
+        <span className="mb-1 flex justify-between text-sm">
+          <span className="text-gray-600">Say "unsure" below this confidence</span>
+          <span className="tabular-nums text-gray-500">{pct(model.minConfidence)}</span>
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={50}
+          value={Math.round(model.minConfidence * 100)}
+          onChange={(e) => setModel((m) => ({ ...m, minConfidence: Number(e.target.value) / 100 }))}
+          className="w-full accent-indigo-600"
+        />
+        <span className="text-xs text-gray-500">
+          Higher means fewer wrong letters but more "unsure". Both settings are also used by Translate and Learn.
+        </span>
       </label>
     </Card>
   );
@@ -272,6 +303,18 @@ function TrainingData({ model, bends }: { model: SignModel; bends: number[] }) {
     }
   }
 
+  async function importCollect() {
+    try {
+      const data = await loadCollectData();
+      const samples = data ? samplesFromCollectData(data) : [];
+      if (!samples.length) throw new Error("No static or rest samples on the Collect page yet.");
+      setModel((m) => ({ ...m, samples: [...m.samples, ...samples] }));
+      setMsg({ ok: true, text: `Added ${samples.length} samples from the Collect page.` });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't read the Collect page's data." });
+    }
+  }
+
   function exportCsv() {
     const blob = new Blob([samplesToCsv(model.samples)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -287,6 +330,9 @@ function TrainingData({ model, bends }: { model: SignModel; bends: number[] }) {
       description={`${model.samples.length} samples. The recognizer is only as good as these: record more reps per letter to make it sturdier.`}
       action={
         <div className="flex flex-wrap justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={importCollect}>
+            <Database className="h-3.5 w-3.5" /> Add from Collect
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => pickFile("add")}>
             <Upload className="h-3.5 w-3.5" /> Add CSV
           </Button>
@@ -365,6 +411,9 @@ function RobustnessTest({ model }: { model: SignModel }) {
 
   const total = results?.reduce((s, r) => s + r.trials, 0) ?? 0;
   const correct = results?.reduce((s, r) => s + r.correct, 0) ?? 0;
+  // "Unsure" and "no letter" are safe misses; a wrong letter is the costly one.
+  const held = results?.reduce((s, r) => s + (r.confusedWith.unsure ?? 0) + (r.confusedWith.far ?? 0), 0) ?? 0;
+  const share = (n: number) => `${Math.round((n / total) * 100)}%`;
 
   return (
     <Card
@@ -387,8 +436,9 @@ function RobustnessTest({ model }: { model: SignModel }) {
           Run test
         </Button>
         {results && (
-          <span className="text-sm font-medium text-gray-900">
-            {Math.round((correct / total) * 100)}% recognized overall
+          <span className="text-sm text-gray-600">
+            <span className="font-medium text-gray-900">{share(correct)} right</span> · {share(held)} unsure or no
+            letter · <span className="font-medium text-red-700">{share(total - correct - held)} wrong letter</span>
           </span>
         )}
       </div>
@@ -408,7 +458,7 @@ function RobustnessTest({ model }: { model: SignModel }) {
               const mistakes = Object.entries(r.confusedWith)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 3)
-                .map(([l, n]) => `${l === "none" ? "no letter" : l} ${Math.round((n / r.trials) * 100)}%`);
+                .map(([l, n]) => `${l === "far" ? "no letter" : l === REST_LABEL ? "Rest" : l} ${Math.round((n / r.trials) * 100)}%`);
               return (
                 <tr key={r.label} className="border-t border-gray-100">
                   <td className="py-1.5 font-semibold text-gray-800">{r.label === REST_LABEL ? "Rest" : r.label}</td>

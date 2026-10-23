@@ -12,8 +12,9 @@
  *
  * Finger order everywhere: [thumb, index, middle, ring, pinky].
  */
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import defaultCsv from "../data/asl-samples.csv?raw";
+import type { CollectData } from "./collectData";
 
 export type Sample = { label: string; bends: number[] };
 
@@ -21,13 +22,20 @@ export type SignModel = {
   samples: Sample[];
   /** Reject a match whose average finger difference (0–1) is above this. */
   maxDistance: number;
+  /** Report "unsure" when the winner is less than this much closer than the runner-up (0–1). */
+  minConfidence: number;
 };
 
 export type Ranked = { label: string; distance: number };
 
 export type Classification = {
-  /** null when nothing is close enough, or the closest is "Rest". */
+  /** The letter to act on; null unless `status` is "letter". */
   label: string | null;
+  /**
+   * letter: confident match · unsure: the two closest are too alike to call ·
+   * far: nothing is close enough · rest: the hand looks like the "Rest" samples.
+   */
+  status: "letter" | "unsure" | "far" | "rest";
   /** Every label, closest first. */
   ranked: Ranked[];
   /** 0–1: how much closer the winner is than the runner-up. Low = easily confused. */
@@ -37,6 +45,7 @@ export type Classification = {
 /** Samples with this label teach the model what "not signing" looks like. */
 export const REST_LABEL = "REST";
 export const DEFAULT_MAX_DISTANCE = 0.25;
+export const DEFAULT_MIN_CONFIDENCE = 0.15;
 
 const STORAGE_KEY = "bridge-sign-model-v1";
 
@@ -73,6 +82,7 @@ export function parseSamplesCsv(text: string): Sample[] {
   const [header, ...rows] = parseCsvRows(text);
   if (!header) throw new Error("The file is empty.");
   const col = (name: string) => header.findIndex((h) => h.trim().toLowerCase() === name);
+  if (col("sample_id") >= 0 && col("frame_idx") >= 0) return parseFramesCsv(rows, col);
   const labelCol = col("letter") >= 0 ? col("letter") : col("label");
   const pctCols = [1, 2, 3, 4, 5].map((i) => col(`pct_f${i}`));
   const modeCol = col("mode");
@@ -89,6 +99,48 @@ export function parseSamplesCsv(text: string): Sample[] {
     samples.push({ label, bends: bends.map(clamp01) });
   }
   return samples;
+}
+
+/**
+ * Reads the Collect page's frames CSV (one row per packet, R_/L_ columns):
+ * each sample becomes the average bend over its frames. "none" samples
+ * become Rest; moving ones are skipped.
+ */
+function parseFramesCsv(rows: string[][], col: (name: string) => number): Sample[] {
+  const idCol = col("sample_id");
+  const labelCol = col("label");
+  const typeCol = col("sign_type");
+  const hands = ["r", "l"].map((h) => [1, 2, 3, 4, 5].map((i) => col(`${h}_pct_f${i}`)));
+  if (labelCol < 0 || hands.some((h) => h.some((c) => c < 0))) {
+    throw new Error("Expected label and R_/L_ pct_f1 … pct_f5 columns.");
+  }
+  const groups = new Map<string, { label: string; sum: number[]; n: number }>();
+  for (const r of rows) {
+    const type = typeCol >= 0 ? r[typeCol]?.trim().toLowerCase() : "static";
+    if (type === "moving") continue;
+    // Each row fills one hand's columns and leaves the other empty.
+    const cols = hands.find((h) => r[h[0]]?.trim() !== "");
+    if (!cols) continue;
+    const pct = cols.map((c) => Number(r[c]) / 100);
+    if (pct.some((v) => !Number.isFinite(v))) continue;
+    const label = type === "none" ? REST_LABEL : r[labelCol]?.trim().toUpperCase();
+    if (!label) continue;
+    const g = groups.get(r[idCol]) ?? { label, sum: [0, 0, 0, 0, 0], n: 0 };
+    pct.forEach((v, i) => (g.sum[i] += v));
+    g.n++;
+    groups.set(r[idCol], g);
+  }
+  return [...groups.values()].map((g) => ({ label: g.label, bends: g.sum.map((v) => clamp01(v / g.n)) }));
+}
+
+/** Same as the frames CSV, straight from the Collect page's saved data. */
+export function samplesFromCollectData(data: CollectData): Sample[] {
+  return data.samples
+    .filter((s) => s.sign_type !== "moving" && s.frames.length > 0)
+    .map((s) => ({
+      label: s.sign_type === "none" ? REST_LABEL : s.label.toUpperCase(),
+      bends: [0, 1, 2, 3, 4].map((i) => clamp01(s.frames.reduce((sum, f) => sum + f.pct[i], 0) / s.frames.length / 100)),
+    }));
 }
 
 export function samplesToCsv(samples: Sample[]): string {
@@ -121,8 +173,43 @@ export function classify(model: SignModel, bends: number[], skip?: Sample): Clas
   const ranked = [...best].map(([label, distance]) => ({ label, distance })).sort((a, b) => a.distance - b.distance);
   const [first, second] = ranked;
   const confidence = first && second && second.distance > 0 ? 1 - first.distance / second.distance : first ? 1 : 0;
-  const label = first && first.distance <= model.maxDistance && first.label !== REST_LABEL ? first.label : null;
-  return { label, ranked, confidence };
+  const status: Classification["status"] =
+    !first || first.distance > model.maxDistance ? "far"
+    : first.label === REST_LABEL ? "rest"
+    : confidence < model.minConfidence ? "unsure"
+    : "letter";
+  return { label: status === "letter" ? first.label : null, status, ranked, confidence };
+}
+
+/** How long a label must dominate before the smoothed prediction switches to it. */
+export const SMOOTHING_MS = 300;
+
+/**
+ * classify() smoothed over the last SMOOTHING_MS: a label wins only if it was
+ * the result for most of that time, so sensor noise doesn't make the letter
+ * flicker (E → S → E). Returns the latest raw result alongside.
+ */
+export function useSmoothedClassification(model: SignModel, bends: number[], active: boolean) {
+  const history = useRef<{ t: number; key: string }[]>([]);
+  const raw = classify(model, bends);
+  const now = performance.now();
+  if (!active) {
+    history.current = [];
+    return { ...raw, label: null, status: "far" as const, raw };
+  }
+  const key = raw.status === "letter" ? raw.label! : raw.status;
+  history.current = [...history.current.filter((h) => now - h.t < SMOOTHING_MS), { t: now, key }];
+  const votes = new Map<string, number>();
+  history.current.forEach((h) => votes.set(h.key, (votes.get(h.key) ?? 0) + 1));
+  const [winner, n] = [...votes].sort((a, b) => b[1] - a[1])[0];
+  if (n / history.current.length < 0.6) return { ...raw, label: null, status: "unsure" as const, raw };
+  const isLetter = !["far", "rest", "unsure"].includes(winner);
+  return {
+    ...raw,
+    label: isLetter ? winner : null,
+    status: (isLetter ? "letter" : winner) as Classification["status"],
+    raw,
+  };
 }
 
 /** Labels the model can output, alphabetical. */
@@ -151,9 +238,10 @@ export function noiseTest(model: SignModel, noise: number, trialsPerSample = 40)
     const r = results.get(s.label) ?? { label: s.label, trials: 0, correct: 0, confusedWith: {} };
     for (let t = 0; t < trialsPerSample; t++) {
       const jittered = s.bends.map((b) => clamp01(b + (Math.random() * 2 - 1) * noise));
-      const got = classify(model, jittered).label ?? "none";
+      const c = classify(model, jittered);
+      const got = c.status === "letter" ? c.label! : c.status === "rest" ? REST_LABEL : c.status;
       r.trials++;
-      if (got === (s.label === REST_LABEL ? "none" : s.label)) r.correct++;
+      if (got === s.label) r.correct++;
       else r.confusedWith[got] = (r.confusedWith[got] ?? 0) + 1;
     }
     results.set(s.label, r);
@@ -171,7 +259,7 @@ export function leaveOneOut(model: SignModel): { tested: number; correct: number
   const testable = model.samples.filter((s) => (counts.get(s.label) ?? 0) >= 2);
   if (!testable.length) return null;
   const correct = testable.filter((s) => {
-    const got = classify({ ...model, maxDistance: Infinity }, s.bends, s).ranked[0]?.label;
+    const got = classify({ ...model, maxDistance: Infinity, minConfidence: 0 }, s.bends, s).ranked[0]?.label;
     return got === s.label;
   }).length;
   return { tested: testable.length, correct };
@@ -182,7 +270,7 @@ export function leaveOneOut(model: SignModel): { tested: number; correct: number
 const DEFAULT_SAMPLES = parseSamplesCsv(defaultCsv);
 
 export function defaultModel(): SignModel {
-  return { samples: DEFAULT_SAMPLES, maxDistance: DEFAULT_MAX_DISTANCE };
+  return { samples: DEFAULT_SAMPLES, maxDistance: DEFAULT_MAX_DISTANCE, minConfidence: DEFAULT_MIN_CONFIDENCE };
 }
 
 let model: SignModel = load();
@@ -192,8 +280,11 @@ function load(): SignModel {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const m = JSON.parse(raw) as SignModel;
-      if (Array.isArray(m.samples) && typeof m.maxDistance === "number") return m;
+      // Older saves don't have minConfidence.
+      const m = JSON.parse(raw) as Partial<SignModel>;
+      if (Array.isArray(m.samples) && typeof m.maxDistance === "number") {
+        return { samples: m.samples, maxDistance: m.maxDistance, minConfidence: m.minConfidence ?? DEFAULT_MIN_CONFIDENCE };
+      }
     }
   } catch {
     /* fall through to the bundled samples */

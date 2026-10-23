@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Delete, Pause, Play, Space } from "lucide-react";
 import { useSensor } from "../context/SensorContext";
 import { Button, Card, GloveGate, Page, PageHeader } from "../components/common";
-import { classify, modelLetters, useSignModel } from "../lib/signModel";
+import { modelLetters, useSignModel, useSmoothedClassification } from "../lib/signModel";
 
 /** How long a letter must be held before it's added to the text. */
 const HOLD_MS = 700;
@@ -16,9 +16,11 @@ export default function Translate() {
   const [holdProgress, setHoldProgress] = useState(0);
 
   const active = connected && !!calibration && !paused;
-  const result = active ? classify(model, bends) : null;
-  const current = result?.label ?? null;
-  const runnerUp = result?.ranked.find((r) => r.label !== current);
+  const result = useSmoothedClassification(model, bends, active);
+  const current = result.label;
+  const runnerUp = result.ranked.find((r) => r.label !== current);
+  // Two letters too close to call: show both instead of typing a guess.
+  const unsureOf = result.status === "unsure" ? result.ranked.slice(0, 2).map((r) => r.label) : null;
 
   // A letter is committed once it's held for HOLD_MS. To type it twice, change
   // to another shape (or relax your hand) in between.
@@ -62,17 +64,17 @@ export default function Translate() {
           <GloveGate what="start translating">
             <div className="flex flex-col items-center py-6" aria-live="polite">
               <p className="text-sm text-gray-500">{paused ? "Paused" : "Current sign"}</p>
-              <p className={`mt-2 text-8xl font-semibold tabular-nums ${current ? "text-indigo-600" : "text-gray-200"}`}>
-                {current ?? "–"}
+              <p className={`mt-2 text-8xl font-semibold tabular-nums ${current ? "text-indigo-600" : unsureOf ? "text-amber-400" : "text-gray-200"}`}>
+                {current ?? (unsureOf ? `${unsureOf[0]}?` : "–")}
               </p>
               <div className="mt-4 h-1.5 w-40 overflow-hidden rounded-full bg-gray-100" aria-hidden>
-                <div className="h-full bg-indigo-500" style={{ width: `${holdProgress * 100}%` }} />
+                <div className="h-full bg-indigo-500" style={{ width: `${current ? holdProgress * 100 : 0}%` }} />
               </div>
-              {current && runnerUp && (
-                <p className="mt-3 text-xs text-gray-500 tabular-nums">
-                  {Math.round(result!.confidence * 100)}% sure · next closest {runnerUp.label}
-                </p>
-              )}
+              {/* Fixed height so the card doesn't jump as this line comes and goes. */}
+              <p className={`mt-3 h-4 text-xs tabular-nums ${unsureOf ? "text-amber-700" : "text-gray-500"}`}>
+                {current && runnerUp && `${Math.round(result.confidence * 100)}% sure · next closest ${runnerUp.label}`}
+                {unsureOf && `Not sure: ${unsureOf.join(" or ")}? Hold the shape more clearly.`}
+              </p>
             </div>
           </GloveGate>
         </Card>
