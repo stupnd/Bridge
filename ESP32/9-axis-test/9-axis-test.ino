@@ -24,17 +24,9 @@ void scanI2C() {
   if (found == 0) Serial.println("  no devices found -> check SDA/SCL/3.3V/GND wiring");
 }
 
-void setup() {
-  Serial.begin(115200);
-  delay(2000); // wait for sensor to fully power up
-  Wire.begin();
-  Wire.setClock(400000);
-  delay(500);
-
-  scanI2C();
-
-  // Try both possible addresses. SparkFun breakouts default to AD0=1 (0x69);
-  // most generic breakouts default to AD0=0 (0x68).
+// Blocks until the sensor responds. Tries both possible addresses:
+// SparkFun breakouts default to AD0=1 (0x69), most generic ones to AD0=0 (0x68).
+void connectSensor() {
   bool initialized = false;
   while (!initialized) {
     for (uint8_t ad0 = 0; ad0 <= 1 && !initialized; ad0++) {
@@ -50,7 +42,24 @@ void setup() {
     }
     if (!initialized) delay(1000);
   }
+}
 
+void setup() {
+  Serial.begin(115200);
+  delay(2000); // wait for sensor to fully power up
+  Wire.begin();
+  Wire.setClock(400000);
+  Wire.setTimeOut(50); // ms; don't hang forever if the bus locks up
+  delay(500);
+
+  scanI2C();
+
+  connectSensor();
+
+  printHeader();
+}
+
+void printHeader() {
   Serial.println();
   Serial.println("accX\taccY\taccZ\t|\tgyrX\tgyrY\tgyrZ\t|\tmagX\tmagY\tmagZ");
   Serial.println("(mg)\t\t\t|\t(dps)\t\t\t|\t(uT)");
@@ -62,8 +71,22 @@ void printCol(float v) {
   Serial.print('\t');
 }
 
+unsigned long lastSampleMs = 0;
+
 void loop() {
+  // If the sensor goes quiet (loose wire, I2C bus lock-up), say so and reconnect
+  // instead of silently printing nothing.
+  if (millis() - lastSampleMs > 2000) {
+    Serial.print("No data for 2s. Sensor status: ");
+    Serial.println(myICM.statusString());
+    scanI2C();
+    connectSensor();
+    printHeader();
+    lastSampleMs = millis();
+  }
+
   if (myICM.dataReady()) {
+    lastSampleMs = millis();
     myICM.getAGMT(); // read accel, gyro, mag, temp
 
     printCol(myICM.accX()); printCol(myICM.accY()); printCol(myICM.accZ());
@@ -73,6 +96,6 @@ void loop() {
     printCol(myICM.magX()); printCol(myICM.magY()); printCol(myICM.magZ());
     Serial.println();
 
-    delay(100);
+    delay(20); // ~50 Hz — fast enough to catch quick hand movements
   }
 }
