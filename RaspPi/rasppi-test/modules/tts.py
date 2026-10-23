@@ -5,6 +5,9 @@ import numpy as np
 from scipy.signal import resample_poly
 
 # Get file directory
+# In the tts-model folder, be sure to add a Piper TTS model:
+# https://docs.gladecore.com/files/piper-voice-models
+# Be sure to add both the .onnx (model) and .onnx.json (config) files
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 model_dir = os.path.join(root_dir, "tts-model")
 

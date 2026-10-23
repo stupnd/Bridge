@@ -13,7 +13,7 @@ data_queue = asyncio.Queue()
 def get_handler(name):
     def handler(char, data):
         # Puts tagged data into the queue
-        data_queue.put((name, data))
+        data_queue.put_nowait((name, data))
     return handler
 
 # Discover and return a device by name
