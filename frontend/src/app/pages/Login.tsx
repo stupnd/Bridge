@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Hand } from "lucide-react";
 import { supabase } from "../../supabaseClient";
@@ -9,11 +9,20 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Already signed in: skip the form.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) navigate("/app", { replace: true });
+    });
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setInfo("");
     setLoading(true);
 
     if (isSignUp) {
@@ -21,7 +30,7 @@ export default function Login() {
       if (error) {
         setError(error.message);
       } else {
-        setError("Check your email for a confirmation link.");
+        setInfo("Check your email for a confirmation link.");
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -56,6 +65,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all"
                 placeholder="you@example.com"
+                autoComplete="email"
                 required
               />
             </div>
@@ -69,22 +79,21 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all"
                 placeholder="••••••••"
+                autoComplete={isSignUp ? "new-password" : "current-password"}
+                minLength={isSignUp ? 6 : undefined}
                 required
               />
             </div>
 
-            {error && (
-              <p className={`text-sm ${error.includes("Check your email") ? "text-green-600" : "text-red-500"}`}>
-                {error}
-              </p>
-            )}
+            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+            {info && <p className="text-sm text-green-700" role="status">{info}</p>}
 
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {loading ? "..." : isSignUp ? "Sign Up" : "Log In"}
+              {loading ? (isSignUp ? "Creating account…" : "Signing in…") : isSignUp ? "Create account" : "Sign in"}
             </button>
           </form>
         </div>
@@ -92,10 +101,11 @@ export default function Login() {
         <p className="text-center text-sm text-gray-600 mt-6">
           {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
           <button
-            onClick={() => { setIsSignUp(!isSignUp); setError(""); }}
+            type="button"
+            onClick={() => { setIsSignUp(!isSignUp); setError(""); setInfo(""); }}
             className="text-indigo-600 hover:underline"
           >
-            {isSignUp ? "Log in" : "Sign up"}
+            {isSignUp ? "Sign in" : "Sign up"}
           </button>
         </p>
       </div>

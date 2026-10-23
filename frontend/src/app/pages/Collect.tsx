@@ -1,16 +1,18 @@
 import DataCollector from "../components/DataCollector";
+import MotionLab from "../components/MotionLab";
+import { Page, PageHeader } from "../components/common";
 
 export default function Collect() {
   return (
-    <div className="max-w-4xl mx-auto p-6 pb-24 md:pb-6">
-      <div className="mb-6">
-        <h1 className="text-3xl mb-2">Data Collection</h1>
-        <p className="text-gray-600">
-          Record labeled glove samples for the static ASL letter pilot.
-        </p>
+    <Page>
+      <PageHeader
+        title="Collect data"
+        description="Record labeled signs to train and test the recognition model."
+      />
+      <div className="space-y-6">
+        <DataCollector />
+        <MotionLab />
       </div>
-
-      <DataCollector />
-    </div>
+    </Page>
   );
 }

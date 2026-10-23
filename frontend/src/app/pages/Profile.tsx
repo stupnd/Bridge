@@ -1,117 +1,79 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { User, Mail, Calendar, Award, LogOut, Settings, Info } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { supabase } from "../../supabaseClient";
+import { Button, Card, Page, PageHeader } from "../components/common";
+import { ALPHABET } from "../lib/asl";
+import { isLearned, letterProgress, useLearnProgress } from "../lib/learnProgress";
+import { useRecordings } from "../lib/recordings";
 
 export default function Profile() {
   const navigate = useNavigate();
+  const [user, setUser] = useState<{ email: string; joined: string } | null>(null);
+  const progress = useLearnProgress();
+  const { recordings } = useRecordings();
 
-  const handleLogout = async () => {
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user;
+      if (u) {
+        setUser({
+          email: u.email ?? "",
+          joined: new Date(u.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        });
+      }
+    });
+  }, []);
+
+  async function signOut() {
     await supabase.auth.signOut();
     navigate("/");
-  };
+  }
+
+  const perLetter = ALPHABET.map((l) => letterProgress(progress, l.letter));
+  const learned = perLetter.filter(isLearned).length;
+  const practiced = perLetter.reduce((s, p) => s + p.practiced, 0);
+  const quizRight = perLetter.reduce((s, p) => s + p.quizCorrect, 0);
+  const quizTotal = quizRight + perLetter.reduce((s, p) => s + p.quizWrong, 0);
 
   const stats = [
-    { label: "Words Learned", value: "127", icon: Award },
-    { label: "Practice Sessions", value: "45", icon: Calendar },
-    { label: "Current Streak", value: "12 days", icon: Calendar },
+    { label: "Letters learned", value: `${learned} / ${ALPHABET.length}` },
+    { label: "Glove practice reps", value: String(practiced) },
+    { label: "Quiz accuracy", value: quizTotal ? `${Math.round((quizRight / quizTotal) * 100)}%` : "–" },
+    { label: "Samples recorded", value: String(recordings.length) },
   ];
 
   return (
-    <div className="max-w-4xl mx-auto p-6 pb-24 md:pb-6">
-      <h1 className="text-3xl mb-8">Account</h1>
+    <Page>
+      <PageHeader title="Account" />
 
-      {/* Profile Card */}
-      <div className="bg-white rounded-2xl shadow-md p-8 mb-6 border border-gray-100">
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-          <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center">
-            <User className="w-12 h-12 text-indigo-600" />
-          </div>
-          
-          <div className="flex-1 text-center md:text-left">
-            <h2 className="text-2xl mb-2">Sarah Johnson</h2>
-            <div className="flex flex-col md:flex-row gap-4 text-gray-600 mb-4">
-              <div className="flex items-center justify-center md:justify-start gap-2">
-                <Mail className="w-4 h-4" />
-                <span className="text-sm">sarah.johnson@example.com</span>
-              </div>
-              <div className="flex items-center justify-center md:justify-start gap-2">
-                <Calendar className="w-4 h-4" />
-                <span className="text-sm">Joined Jan 2026</span>
-              </div>
+      <div className="space-y-6">
+        <Card>
+          <div className="flex items-center gap-4">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100">
+              <User className="h-7 w-7 text-indigo-600" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-gray-900">{user?.email ?? "…"}</p>
+              {user && <p className="text-sm text-gray-500">Member since {user.joined}</p>}
             </div>
+            <Button variant="secondary" onClick={signOut}>
+              <LogOut className="h-4 w-4" /> Sign out
+            </Button>
           </div>
-        </div>
-      </div>
+        </Card>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {stats.map((stat, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-xl shadow-md p-6 border border-gray-100"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
-                <stat.icon className="w-5 h-5 text-indigo-600" />
+        <Card title="Your progress" description="Saved in this browser.">
+          <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {stats.map((s) => (
+              <div key={s.label} className="flex flex-col-reverse rounded-xl bg-gray-50 p-4">
+                <dt className="mt-1 text-sm text-gray-500">{s.label}</dt>
+                <dd className="text-2xl font-semibold text-gray-900 tabular-nums">{s.value}</dd>
               </div>
-              <div>
-                <p className="text-2xl">{stat.value}</p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-600">{stat.label}</p>
-          </div>
-        ))}
+            ))}
+          </dl>
+        </Card>
       </div>
-
-      {/* Prototype Notice */}
-      <div className="bg-indigo-50 rounded-xl p-4 mb-6 border border-indigo-100">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-indigo-800">
-            Stats shown are representative for prototype demonstration
-          </p>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="bg-white rounded-2xl shadow-md p-6 mb-6 border border-gray-100">
-        <h3 className="text-xl mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          {[
-            { action: "Completed lesson", detail: "Greetings - Basic Signs", time: "2 hours ago" },
-            { action: "Practiced word", detail: "Thank You", time: "5 hours ago" },
-            { action: "Reached milestone", detail: "100 words learned", time: "1 day ago" },
-            { action: "Completed lesson", detail: "Food & Drink Vocabulary", time: "2 days ago" },
-          ].map((activity, index) => (
-            <div key={index} className="flex items-start gap-3 py-3 border-b last:border-b-0 border-gray-100">
-              <div className="w-2 h-2 bg-indigo-600 rounded-full mt-2" />
-              <div className="flex-1">
-                <p className="text-gray-900">{activity.action}</p>
-                <p className="text-sm text-gray-600">{activity.detail}</p>
-              </div>
-              <span className="text-sm text-gray-500">{activity.time}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Settings & Actions */}
-      <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">
-        <h3 className="text-xl mb-4">Settings</h3>
-        <div className="space-y-2">
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-            <Settings className="w-5 h-5" />
-            <span>App Settings</span>
-          </button>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Log Out</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    </Page>
   );
 }
