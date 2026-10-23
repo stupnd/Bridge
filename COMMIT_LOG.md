@@ -2,6 +2,69 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-10-16 12:19 — Krisha · [`22ecfa1`](https://github.com/stupnd/Bridge/commit/22ecfa10630fc688049d97a78a5158f4d39c4f6e) · pushed by @KrishaVeera
+
+**Collect page: frame-by-frame recording for all sign types, CSV export, IndexedDB autosave**
+
+- SensorContext parses IMU + flex from every packet and exposes subscribe() for per-frame capture
+- DataCollector drops Supabase; adds hand toggle, free-text label, Static/Moving/None types with editable window, countdown + progress, per-sample rate/IMU warnings, delete-last
+- Long-format frames CSV (R_/L_ columns) plus per-session calibration CSV
+- Autosave to IndexedDB with restore on load; dev-only glove simulator at 50 Hz
+
+Files changed (7):
+- `frontend/src/app/components/DataCollector.tsx` (+403 / −265)
+- `frontend/src/app/context/SensorContext.tsx` (+121 / −13)
+- `frontend/src/app/lib/captureFrames.ts` (+44 / −0)
+- `frontend/src/app/lib/collectData.ts` (+159 / −0)
+- `frontend/src/app/lib/collectStorage.ts` (+46 / −0)
+- `frontend/src/app/lib/gloveSimulator.ts` (+35 / −0)
+- `frontend/src/app/pages/Collect.tsx` (+2 / −1)
+
+### 2026-10-09 08:54 — William · [`d84ee02`](https://github.com/stupnd/Bridge/commit/d84ee0265020c330b5830468b544bef4e64f7215) · pushed by @TheCakeOfTruth
+
+**Merge pull request #7 from stupnd/rasppi-tts**
+
+Set up the Raspberry Pi and text-to-speech
+
+Files changed (9):
+- `.gitignore` (+4 / −0)
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/Raspberry Pi Setup/watcher.py` (+196 / −0)
+- `RaspPi/package-export.txt` (+26 / −0)
+- `RaspPi/tts-test/main.py` (+4 / −0)
+- `RaspPi/tts-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/tts-test/modules/bluetooth.py` (+59 / −0)
+- `RaspPi/tts-test/modules/tts.py` (+47 / −0)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
+### 2026-10-02 10:56 — Cake · [`4b4192e`](https://github.com/stupnd/Bridge/commit/4b4192ebdf5ede649767f6694432077e8757d12d) · pushed by @TheCakeOfTruth
+
+**Began work on bluetooth connection**
+
+Files changed (8):
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/Raspberry Pi Setup/watcher.py` (+20 / −14)
+- `RaspPi/package-export.txt` (+11 / −1)
+- `RaspPi/tts-test/main.py` (+3 / −37)
+- `RaspPi/tts-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/tts-test/modules/bluetooth.py` (+59 / −0)
+- `RaspPi/tts-test/modules/tts.py` (+47 / −0)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
+### 2026-09-26 23:39 — Cake · [`646a75f`](https://github.com/stupnd/Bridge/commit/646a75fef230bc63dc46598c850082e7310629c4) · pushed by @TheCakeOfTruth
+
+**Set up the Raspberry Pi, added a test script for text-to-speech**
+
+See setup instructions and package-export for usage instructions.
+
+Files changed (6):
+- `.gitignore` (+4 / −0)
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/Raspberry Pi Setup/watcher.py` (+190 / −0)
+- `RaspPi/package-export.txt` (+16 / −0)
+- `RaspPi/tts-test/main.py` (+38 / −0)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
 ### 2026-09-25 10:33 — Krisha Veera · [`5282362`](https://github.com/stupnd/Bridge/commit/5282362861425bdef0e9927c42f651e42f9c8b8f) · pushed by @KrishaVeera
 
 **Add ML data-collection page with Supabase sync and CSV export**

@@ -5,13 +5,13 @@ import { supabase } from "../../supabaseClient";
 import { Button, Card, Page, PageHeader } from "../components/common";
 import { ALPHABET } from "../lib/asl";
 import { isLearned, letterProgress, useLearnProgress } from "../lib/learnProgress";
-import { useRecordings } from "../lib/recordings";
+import { useSignModel } from "../lib/signModel";
 
 export default function Profile() {
   const navigate = useNavigate();
   const [user, setUser] = useState<{ email: string; joined: string } | null>(null);
   const progress = useLearnProgress();
-  const { recordings } = useRecordings();
+  const model = useSignModel();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -40,7 +40,7 @@ export default function Profile() {
     { label: "Letters learned", value: `${learned} / ${ALPHABET.length}` },
     { label: "Glove practice reps", value: String(practiced) },
     { label: "Quiz accuracy", value: quizTotal ? `${Math.round((quizRight / quizTotal) * 100)}%` : "–" },
-    { label: "Samples recorded", value: String(recordings.length) },
+    { label: "Training samples", value: String(model.samples.length) },
   ];
 
   return (

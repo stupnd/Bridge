@@ -16,7 +16,7 @@ import {
   trainKnn,
   upAxisLabel,
 } from "../lib/imu";
-import { Recording, useRecordings } from "../lib/recordings";
+import type { Recording } from "../lib/recordings";
 import { Card } from "./common";
 
 const LIVE_REFRESH_MS = 250;
@@ -35,9 +35,8 @@ function liveCalibration() {
   return c ? { open: c.straight, closed: c.bent } : null;
 }
 
-export default function MotionLab() {
+export default function MotionLab({ recordings }: { recordings: Recording[] }) {
   const { connected, subscribe } = useSensor();
-  const { recordings } = useRecordings();
   const featureSet: FeatureSetKey = "all";
 
   // ── Training data: labels with enough recordings ──

@@ -1,471 +1,627 @@
 import { useState, useRef, useEffect } from "react";
-import { Circle, Download, Trash2 } from "lucide-react";
-import { supabase } from "../../supabaseClient";
 import { rawToBendNormalized } from "../lib/flexCalibrationStorage";
 import { useSensor } from "../context/SensorContext";
-import { computeFeatures, Frame } from "../lib/imu";
-import { getLetter } from "../lib/asl";
-import { Recording, setRecordings, useRecordings } from "../lib/recordings";
-import { Button, Card, GloveGate, StatusDot } from "./common";
-import { CalibrationPrompt, useCalibration } from "./Calibration";
-import FingerBars from "./FingerBars";
+import { averageFingers, captureFrames } from "../lib/captureFrames";
+import {
+  buildCalibrationCsv,
+  buildFramesCsv,
+  downloadCsvFile,
+  nextRep,
+  sampleRateHz,
+  sampleWarnings,
+  SIGN_TYPE_WINDOW_MS,
+  type CollectData,
+  type CollectSample,
+  type CollectSession,
+  type Hand,
+  type SignType,
+} from "../lib/collectData";
+import { loadCollectData, saveCollectData } from "../lib/collectStorage";
 
-/** Labels offered as one-tap buttons. "Rest" teaches the model what "not signing" looks like. */
-const LABELS = ["A", "E", "M", "N", "S", "T", "J", "Z", "Rest"] as const;
+const FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"] as const;
 const PARTICIPANT_KEY = "bridge-collect-participant-id";
-// Static poses are averaged over a short hold; movements need room for the whole gesture.
-const WINDOW_MS = { static: 1000, movement: 2000 } as const;
-const MOVEMENT_COUNTDOWN_S = 3;
+const HAND_KEY = "bridge-collect-hand";
+const NOTES_MAX = 140;
+const LABEL_MAX = 40;
+const CALIB_HOLD_MS = 1500;
+const MIN_WINDOW_MS = 200;
+const MAX_WINDOW_MS = 30000;
 
-function csvCell(v: string | number | boolean | null): string {
-  const s = v === null ? "" : String(v);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+const HAND_OPTIONS: { value: Hand; label: string }[] = [
+  { value: "L", label: "Left" },
+  { value: "R", label: "Right" },
+];
+
+const SIGN_TYPE_OPTIONS: { value: SignType; label: string }[] = [
+  { value: "static", label: "Static" },
+  { value: "moving", label: "Moving" },
+  { value: "none", label: "None" },
+];
+
+type CalibStep = "idle" | "open" | "open_hold" | "closed" | "closed_hold" | "done";
+type RecPhase = "idle" | "countdown" | "capturing";
+
+function readStored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 
-export default function DataCollector() {
-  const { connected, imuLive, bends, calibration, subscribe } = useSensor();
-  const calib = useCalibration();
+function writeStored(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
 
-  const [participantId, setParticipantId] = useState(() => {
-    try {
-      return localStorage.getItem(PARTICIPANT_KEY) ?? "";
-    } catch {
-      return "";
-    }
-  });
-  const [sessionActive, setSessionActive] = useState(false);
-  const [dbSessionId, setDbSessionId] = useState<number | null>(null);
-  const [localSessionId, setLocalSessionId] = useState<string | null>(null);
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          disabled={disabled}
+          className={`px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+            value === o.value ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** `onDataChange` lets the Collect page hand the samples to Movement Lab. */
+export default function DataCollector({ onDataChange }: { onDataChange?: (data: CollectData) => void }) {
+  const {
+    fingers,
+    imu,
+    connected,
+    status,
+    connect,
+    disconnect,
+    fingersRef,
+    subscribe,
+    simulating,
+    setSimulating,
+    saveCalibration,
+  } = useSensor();
+  const imuValues = [...imu.acc, ...imu.gyr, ...imu.mag];
+  const onDataChangeRef = useRef(onDataChange);
+  onDataChangeRef.current = onDataChange;
+
+  // ── Session setup ──
+  const [participantId, setParticipantId] = useState(() => readStored(PARTICIPANT_KEY) ?? "");
+  const [hand, setHand] = useState<Hand>(() => (readStored(HAND_KEY) === "L" ? "L" : "R"));
+  const [calibStep, setCalibStep] = useState<CalibStep>("idle");
+  const [calibCountdown, setCalibCountdown] = useState(0);
+  const [activeSession, setActiveSession] = useState<CollectSession | null>(null);
   const [sessionMsg, setSessionMsg] = useState("");
 
-  const [label, setLabel] = useState<string>(LABELS[0]);
-  const [customLabel, setCustomLabel] = useState("");
-  const [customMoves, setCustomMoves] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [recordCountdown, setRecordCountdown] = useState(0);
-  const [recordMsg, setRecordMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const { recordings: samples, persistError } = useRecordings();
-  const repCounts = useRef<Record<string, number>>({});
+  // ── Record panel ──
+  const [label, setLabel] = useState("");
+  const [signType, setSignType] = useState<SignType>("static");
+  const [windowMs, setWindowMs] = useState(SIGN_TYPE_WINDOW_MS.static);
+  const [notes, setNotes] = useState("");
+  const [recPhase, setRecPhase] = useState<RecPhase>("idle");
+  const [recCountdown, setRecCountdown] = useState(0);
+  const [recProgress, setRecProgress] = useState(0);
+
+  // ── Stored data ──
+  const [data, setData] = useState<CollectData>({ sessions: [], samples: [] });
+  const dataRef = useRef<CollectData>(data);
+  const [loaded, setLoaded] = useState(false);
+  const [restoreMsg, setRestoreMsg] = useState("");
+  const [saveError, setSaveError] = useState("");
+
+  useEffect(() => writeStored(PARTICIPANT_KEY, participantId), [participantId]);
+  useEffect(() => writeStored(HAND_KEY, hand), [hand]);
 
   useEffect(() => {
+    let cancelled = false;
+    loadCollectData()
+      .then((saved) => {
+        if (cancelled || !saved) return;
+        dataRef.current = saved;
+        setData(saved);
+        onDataChangeRef.current?.(saved);
+        const n = saved.samples.length;
+        if (n > 0) setRestoreMsg(`Restored ${n} sample${n === 1 ? "" : "s"} from a previous session.`);
+      })
+      .catch((err) => {
+        if (!cancelled) setSaveError("Couldn't read saved data: " + errorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Update data in memory and autosave it to IndexedDB. */
+  async function commit(next: CollectData) {
+    dataRef.current = next;
+    setData(next);
+    onDataChangeRef.current?.(next);
     try {
-      localStorage.setItem(PARTICIPANT_KEY, participantId);
-    } catch {
-      /* ignore */
+      await saveCollectData(next);
+      setSaveError("");
+    } catch (err) {
+      setSaveError("Autosave failed — download the CSV to keep your data. (" + errorMessage(err) + ")");
     }
-  }, [participantId]);
+  }
 
-  const isCustom = label === "custom";
-  const letter = (isCustom ? customLabel : label).trim().toUpperCase();
-  // J and Z (and custom labels marked as moving) get a countdown and a longer window.
-  const mode: Recording["mode"] = (isCustom ? customMoves : getLetter(letter)?.movement) ? "movement" : "static";
+  const normalizedLabel = label.trim().toUpperCase();
+  const windowValid = windowMs >= MIN_WINDOW_MS && windowMs <= MAX_WINDOW_MS;
 
-  /** Every packet that arrives in the next `ms`, with `t` made relative to the first one. */
-  function captureFrames(ms: number): Promise<Frame[]> {
-    return new Promise((resolve) => {
-      const frames: Frame[] = [];
-      const unsubscribe = subscribe((f) => frames.push(f));
-      setTimeout(() => {
-        unsubscribe();
-        const t0 = frames[0]?.t ?? 0;
-        // Rounded so a session's worth of recordings fits in localStorage.
-        const r = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
-        resolve(
-          frames.map((f) => ({
-            t: Math.round(f.t - t0),
-            fingers: f.fingers,
-            acc: f.acc.map((v) => r(v, 1)) as Frame["acc"],
-            gyr: f.gyr.map((v) => r(v, 2)) as Frame["gyr"],
-            mag: f.mag.map((v) => r(v, 1)) as Frame["mag"],
-          }))
-        );
-      }, ms);
-    });
+  async function countdown(seconds: number, setValue: (n: number) => void) {
+    for (let i = seconds; i > 0; i--) {
+      setValue(i);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setValue(0);
   }
 
   async function startSession() {
-    if (!participantId.trim()) {
+    const pid = participantId.trim();
+    if (!pid) {
       setSessionMsg("Enter a participant ID first.");
       return;
     }
     setSessionMsg("");
-    setSessionActive(false);
+    setActiveSession(null);
 
-    const { open: openVals, closed: closedVals } = await calib.run();
+    setCalibStep("open");
+    await countdown(3, setCalibCountdown);
+    setCalibStep("open_hold");
+    const open = averageFingers((await captureFrames(subscribe, CALIB_HOLD_MS)).frames, fingersRef.current);
 
-    // Fresh session: reset reps, new local id (independent of Supabase)
-    repCounts.current = {};
-    setLocalSessionId(crypto.randomUUID());
-    setDbSessionId(null);
-    setSessionActive(true);
+    setCalibStep("closed");
+    await countdown(3, setCalibCountdown);
+    setCalibStep("closed_hold");
+    const closed = averageFingers((await captureFrames(subscribe, CALIB_HOLD_MS)).frames, fingersRef.current);
 
-    const { data, error } = await supabase
-      .from("ML - Session Data")
-      .insert({
-        participant_id: participantId.trim(),
-        open_f1: openVals[0],
-        open_f2: openVals[1],
-        open_f3: openVals[2],
-        open_f4: openVals[3],
-        open_f5: openVals[4],
-        closed_f1: closedVals[0],
-        closed_f2: closedVals[1],
-        closed_f3: closedVals[2],
-        closed_f4: closedVals[3],
-        closed_f5: closedVals[4],
-      })
-      .select("session_id")
-      .single();
+    // Shared app-wide, so Translate and the Lab use this calibration too.
+    saveCalibration({ open, closed });
+    setCalibStep("done");
 
-    if (error || !data) {
-      setSessionMsg(
-        "Couldn't reach Supabase (" + (error?.message ?? "no data") + "). Samples will be saved in this browser only."
-      );
-    } else {
-      setDbSessionId(data.session_id as number);
-    }
+    const session: CollectSession = {
+      session_id: crypto.randomUUID(),
+      participant_id: pid,
+      hand,
+      calibrated_at: new Date().toISOString(),
+      open,
+      closed,
+    };
+    setActiveSession(session);
+    setSessionMsg(`Session started ✓ (${pid}, ${hand === "L" ? "left" : "right"} hand)`);
+    await commit({ ...dataRef.current, sessions: [...dataRef.current.sessions, session] });
+  }
+
+  function selectSignType(t: SignType) {
+    setSignType(t);
+    setWindowMs(SIGN_TYPE_WINDOW_MS[t]);
   }
 
   async function recordSample() {
-    if (!calibration || !localSessionId || !letter) return;
-    setRecording(true);
-    setRecordMsg(null);
+    const session = activeSession;
+    if (!session || !normalizedLabel || !windowValid || recPhase !== "idle") return;
+    // Snapshot the settings so edits during the countdown don't change this sample.
+    const sampleLabel = normalizedLabel;
+    const sampleType = signType;
+    const sampleWindow = windowMs;
+    const sampleNotes = notes.trim();
 
-    if (mode === "movement") {
-      for (let i = MOVEMENT_COUNTDOWN_S; i > 0; i--) {
-        setRecordCountdown(i);
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-      setRecordCountdown(0);
-    }
-    const frames = await captureFrames(WINDOW_MS[mode]);
-    if (frames.length < 5) {
-      setRecordMsg({ ok: false, text: `Only ${frames.length} readings arrived, so nothing was saved. Is the glove still connected?` });
-      setRecording(false);
-      return;
-    }
+    setRecPhase("countdown");
+    await countdown(3, setRecCountdown);
+    setRecPhase("capturing");
+    setRecProgress(0);
+    const recordedAt = new Date().toISOString();
+    const { start, frames } = await captureFrames(subscribe, sampleWindow, setRecProgress);
 
-    const raw = [0, 1, 2, 3, 4].map((i) =>
-      Math.round(frames.reduce((sum, f) => sum + f.fingers[i], 0) / frames.length)
-    );
-    const pct = raw.map(
-      (r, i) =>
-        Math.round(rawToBendNormalized(r, calibration.open[i], calibration.closed[i]) * 1000) / 10
-    );
-    const rep = (repCounts.current[letter] ?? 0) + 1;
-    repCounts.current[letter] = rep;
-
-    const sample: Recording = {
-      timestamp: new Date().toISOString(),
-      dbSessionId,
-      localSessionId,
-      participantId: participantId.trim(),
-      letter,
-      rep,
-      mode,
-      raw,
-      pct,
-      notes: "",
-      synced: false,
-      frames,
-      features: computeFeatures(frames, calibration),
+    const sample: CollectSample = {
+      sample_id: crypto.randomUUID(),
+      session_id: session.session_id,
+      participant_id: session.participant_id,
+      hand: session.hand,
+      label: sampleLabel,
+      sign_type: sampleType,
+      rep: nextRep(dataRef.current.samples, session.session_id, sampleLabel),
+      window_ms: sampleWindow,
+      recorded_at: recordedAt,
+      notes: sampleNotes,
+      frames: frames.map((f, i) => ({
+        frame_idx: i,
+        t_ms: Math.round(f.t - start),
+        raw: [...f.fingers],
+        pct: f.fingers.map(
+          (r, j) =>
+            Math.round(rawToBendNormalized(r, session.open[j], session.closed[j]) * 1000) / 10
+        ),
+        // float32 → shortest decimal that round-trips, instead of 0.10000000149…
+        imu: f.imu.map((v) => Number(v.toPrecision(7))),
+      })),
     };
 
-    // Local copy is the source of truth; add before attempting the insert.
-    setRecordings((prev) => [...prev, sample]);
-    setRecordMsg({ ok: true, text: `Saved ${letter}, rep ${rep}` });
-
-    if (dbSessionId !== null) {
-      const { error } = await supabase.from("ML - Training Data").insert({
-        session_id: dbSessionId,
-        timestamp: sample.timestamp,
-        participant_id: sample.participantId,
-        letter: sample.letter,
-        rep: sample.rep,
-        raw_f1: raw[0],
-        raw_f2: raw[1],
-        raw_f3: raw[2],
-        raw_f4: raw[3],
-        raw_f5: raw[4],
-        pct_f1: pct[0],
-        pct_f2: pct[1],
-        pct_f3: pct[2],
-        pct_f4: pct[3],
-        pct_f5: pct[4],
-        notes: null,
-      });
-      if (error) {
-        console.error("Training data insert failed:", error);
-      } else {
-        setRecordings((prev) => prev.map((s) => (s === sample ? { ...s, synced: true } : s)));
-      }
-    }
-    setRecording(false);
+    setRecPhase("idle");
+    await commit({ ...dataRef.current, samples: [...dataRef.current.samples, sample] });
   }
 
-  function saveCsv(name: string, header: string[], rows: (string | number | boolean | null)[][]) {
-    const lines = [header.join(","), ...rows.map((r) => r.map(csvCell).join(","))];
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${name}-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function deleteLastSample() {
+    const samples = dataRef.current.samples;
+    if (samples.length === 0) return;
+    await commit({ ...dataRef.current, samples: samples.slice(0, -1) });
   }
 
-  /** One row per recording: labels, flex averages and the 9-axis summary features. */
-  function downloadCsv() {
-    const header = [
-      "timestamp",
-      "db_session_id",
-      "local_session_id",
-      "participant_id",
-      "letter",
-      "rep",
-      "mode",
-      "raw_f1", "raw_f2", "raw_f3", "raw_f4", "raw_f5",
-      "pct_f1", "pct_f2", "pct_f3", "pct_f4", "pct_f5",
-      "gravity_x", "gravity_y", "gravity_z",
-      "roll_deg", "pitch_deg",
-      "turn_x_deg", "turn_y_deg", "turn_z_deg",
-      "gyro_rms_dps", "gyro_peak_dps", "acc_jerk_mg", "reversals",
-      "duration_ms", "frame_count",
-      "notes",
-      "synced_to_supabase",
-    ];
-    const r2 = (v: number) => Math.round(v * 100) / 100;
-    const rows = samples.map((s) => {
-      const f = s.features;
-      return [
-        s.timestamp,
-        s.dbSessionId,
-        s.localSessionId,
-        s.participantId,
-        s.letter,
-        s.rep,
-        s.mode,
-        ...s.raw,
-        ...s.pct,
-        ...f.gravity.map(r2),
-        r2(f.rollDeg),
-        r2(f.pitchDeg),
-        ...f.rotationDeg.map(r2),
-        r2(f.gyroRms),
-        r2(f.gyroPeak),
-        r2(f.accStd),
-        f.reversals,
-        f.durationMs,
-        f.frameCount,
-        s.notes,
-        s.synced,
-      ];
-    });
-    saveCsv("asl-samples", header, rows);
-  }
-
-  /** One row per sensor reading, for training sequence models later. Joins to the summary on local_session_id + letter + rep. */
-  function downloadFramesCsv() {
-    const header = [
-      "local_session_id", "participant_id", "letter", "rep", "mode", "t_ms",
-      "f1", "f2", "f3", "f4", "f5",
-      "acc_x_mg", "acc_y_mg", "acc_z_mg",
-      "gyr_x_dps", "gyr_y_dps", "gyr_z_dps",
-      "mag_x_ut", "mag_y_ut", "mag_z_ut",
-    ];
-    const rows = samples.flatMap((s) =>
-      s.frames.map((f) => [
-        s.localSessionId, s.participantId, s.letter, s.rep, s.mode, f.t,
-        ...f.fingers, ...f.acc, ...f.gyr, ...f.mag,
-      ])
-    );
-    saveCsv("asl-frames", header, rows);
-  }
-
-  function clearRecordings() {
+  async function clearSavedData() {
+    const n = dataRef.current.samples.length;
     const ok = window.confirm(
-      `Delete all ${samples.length} samples from this browser? Motion data isn't stored anywhere else, so download the CSVs first.`
+      `Delete all ${n} sample${n === 1 ? "" : "s"} saved in this browser? ` +
+        "This can't be undone — download the CSV first if you need it."
     );
-    if (ok) setRecordings(() => []);
+    if (!ok) return;
+    setRestoreMsg("");
+    // Keep the active session's calibration so new samples still export with it.
+    await commit({ sessions: activeSession ? [activeSession] : [], samples: [] });
   }
 
-  const totals: Record<string, number> = {};
-  for (const s of samples) totals[s.letter] = (totals[s.letter] ?? 0) + 1;
-  const nextRep = letter ? (repCounts.current[letter] ?? 0) + 1 : 0;
-  const canRecord = sessionActive && !!letter && !recording && imuLive;
+  function downloadCsv() {
+    const { sessions, samples } = dataRef.current;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const usedSessions = new Set(samples.map((s) => s.session_id));
+    downloadCsvFile(`asl-frames-${stamp}.csv`, buildFramesCsv(samples));
+    downloadCsvFile(
+      `asl-calibration-${stamp}.csv`,
+      buildCalibrationCsv(sessions.filter((s) => usedSessions.has(s.session_id)))
+    );
+  }
+
+  const bendPercents = fingers.map((raw, i) => {
+    if (!activeSession) return Math.round((raw / 4095) * 100);
+    return Math.round(
+      rawToBendNormalized(raw, activeSession.open[i], activeSession.closed[i]) * 100
+    );
+  });
+
+  const calibInProgress = calibStep !== "idle" && calibStep !== "done";
+  const recording = recPhase !== "idle";
+  const samples = data.samples;
+  const lastSample = samples[samples.length - 1];
+  const nextRepNum =
+    activeSession && normalizedLabel
+      ? nextRep(samples, activeSession.session_id, normalizedLabel)
+      : 0;
 
   return (
-    <div className="space-y-6">
-      <Card
-        title="1. Session"
-        description="One session per person per sitting. Starting one calibrates the glove for them."
-        action={
-          sessionActive && (
-            <span className="flex items-center gap-1.5 text-sm text-green-700">
-              <StatusDot tone="ok" /> {dbSessionId !== null ? `Session ${dbSessionId}` : "Local session"}
-            </span>
-          )
-        }
-      >
-        <GloveGate what="record samples" needsCalibration={false}>
-          {calib.running ? (
-            <CalibrationPrompt step={calib.step} countdown={calib.countdown} />
-          ) : (
-            <form
-              className="flex flex-wrap items-end gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                startSession();
-              }}
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 space-y-4">
+        <p className="text-sm text-gray-700">
+          <span className="font-medium">Status:</span> {status}
+          {activeSession && (
+            <span className="ml-2 text-green-600 text-xs font-medium">● Session active</span>
+          )}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {!connected && (
+            <button
+              onClick={connect}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
             >
-              <label className="flex-1 min-w-[12rem]">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Participant ID</span>
-                <input
-                  type="text"
-                  value={participantId}
-                  onChange={(e) => setParticipantId(e.target.value)}
-                  placeholder="e.g. P01"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  maxLength={40}
-                />
-              </label>
-              <Button type="submit" variant={sessionActive ? "secondary" : "primary"} disabled={!participantId.trim()}>
-                {sessionActive ? "Start new session" : "Start session"}
-              </Button>
-            </form>
+              Connect via Bluetooth
+            </button>
           )}
-          {sessionMsg && <p className="mt-3 text-sm text-amber-700">{sessionMsg}</p>}
-        </GloveGate>
-      </Card>
-
-      {connected && sessionActive && (
-        <Card
-          title="2. Record"
-          description={
-            mode === "movement"
-              ? `Press Record, get into position during the ${MOVEMENT_COUNTDOWN_S}-second countdown, then do the whole movement within 2 seconds.`
-              : "Hold the sign, then press Record. It captures 1 second."
-          }
-        >
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Sign to record">
-            {[...LABELS, "custom"].map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => setLabel(l)}
-                disabled={recording}
-                aria-pressed={label === l}
-                className={`flex min-w-[3.5rem] flex-col items-center rounded-lg border px-3 py-2 transition-colors ${
-                  label === l
-                    ? "border-indigo-600 bg-indigo-600 text-white"
-                    : "border-gray-200 bg-white text-gray-800 hover:border-indigo-300"
-                }`}
-              >
-                <span className="font-semibold">{l === "custom" ? "Other…" : l}</span>
-                {l !== "custom" && (
-                  <span className={`text-xs tabular-nums ${label === l ? "text-indigo-100" : "text-gray-500"}`}>
-                    {totals[l] ?? 0}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {isCustom && (
-            <div className="mt-3 flex flex-wrap items-center gap-4">
+          {connected && (
+            <button
+              onClick={disconnect}
+              disabled={recording || calibInProgress}
+              className="px-4 py-2 rounded-lg bg-red-100 text-red-600 text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          )}
+          {import.meta.env.DEV && (
+            <label className="flex items-center gap-2 text-sm text-gray-600">
               <input
-                type="text"
-                value={customLabel}
-                onChange={(e) => setCustomLabel(e.target.value)}
-                placeholder="Label, e.g. B or HELLO"
-                aria-label="Custom label"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                maxLength={20}
+                type="checkbox"
+                checked={simulating}
+                disabled={(connected && !simulating) || recording || calibInProgress}
+                onChange={(e) => setSimulating(e.target.checked)}
               />
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" checked={customMoves} onChange={(e) => setCustomMoves(e.target.checked)} />
-                This sign moves
-              </label>
-            </div>
+              Simulate glove (dev)
+            </label>
           )}
-
-          <div className="mt-6 grid items-center gap-6 md:grid-cols-[1fr_auto]">
-            <FingerBars bends={bends} compact />
-            <div className="flex flex-col items-center gap-2">
-              <Button size="lg" onClick={recordSample} disabled={!canRecord} className="min-w-[12rem]">
-                <Circle className="h-4 w-4 fill-current" />
-                {recordCountdown > 0
-                  ? `Starting in ${recordCountdown}…`
-                  : recording
-                    ? "Recording…"
-                    : letter
-                      ? `Record ${letter} · rep ${nextRep}`
-                      : "Record"}
-              </Button>
-              <p className="text-xs text-gray-500">{mode === "movement" ? "Movement · 2 s" : "Static · 1 s"}</p>
-            </div>
-          </div>
-
-          <div className="mt-3 min-h-[1.25rem] text-sm" aria-live="polite">
-            {!imuLive ? (
-              <p className="text-amber-700">
-                Recording is paused until the motion sensor responds; samples without it would mislead the model.
-              </p>
-            ) : (
-              recordMsg && <p className={recordMsg.ok ? "text-green-700" : "text-red-600"}>{recordMsg.text}</p>
-            )}
-          </div>
-        </Card>
-      )}
-
-      <Card
-        title={`3. Samples (${samples.length})`}
-        description="Saved in this browser. Supabase only gets finger data, so download the CSVs to keep the motion data."
-        action={
-          samples.length > 0 && (
-            <Button variant="danger" size="sm" onClick={clearRecordings}>
-              <Trash2 className="h-3.5 w-3.5" /> Clear
-            </Button>
-          )
-        }
-      >
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={downloadCsv} disabled={samples.length === 0}>
-            <Download className="h-3.5 w-3.5" /> Summary CSV
-          </Button>
-          <Button variant="secondary" size="sm" onClick={downloadFramesCsv} disabled={samples.length === 0}>
-            <Download className="h-3.5 w-3.5" /> All readings CSV
-          </Button>
         </div>
-        {persistError && (
-          <p className="mt-3 text-sm text-red-600">
-            This browser's storage is full ({persistError}). Download the CSVs before refreshing the page.
+
+        {/* ── Participant + hand + session start ── */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700" htmlFor="participant-id">
+            Participant ID
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <input
+              id="participant-id"
+              type="text"
+              value={participantId}
+              onChange={(e) => setParticipantId(e.target.value)}
+              placeholder="e.g. P01"
+              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              maxLength={40}
+            />
+            <Segmented options={HAND_OPTIONS} value={hand} onChange={setHand} disabled={calibInProgress} />
+            <button
+              type="button"
+              onClick={startSession}
+              disabled={!connected || !loaded || calibInProgress || recording || !participantId.trim()}
+              className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
+            >
+              {activeSession ? "Start new session" : "Start session"}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">
+            Starting a session runs open-hand / closed-fist calibration and resets rep counts. The
+            hand applies to every sample in the session.
+            {activeSession && activeSession.hand !== hand && (
+              <span className="text-amber-700">
+                {" "}
+                Current session is {activeSession.hand === "L" ? "left" : "right"} hand — start a
+                new session to switch.
+              </span>
+            )}
+          </p>
+        </div>
+
+        {sessionMsg && (
+          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            {sessionMsg}
           </p>
         )}
-        {samples.length > 0 && (
-          <details className="mt-4">
-            <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">Show samples</summary>
-            <ul className="mt-2 max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200 text-sm">
+        {restoreMsg && (
+          <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+            {restoreMsg}
+          </p>
+        )}
+        {saveError && (
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {saveError}
+          </p>
+        )}
+
+        {connected && calibInProgress && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1 text-center">
+            {calibStep === "open" && (
+              <>
+                <p className="text-2xl">🖐️</p>
+                <p className="font-semibold text-amber-800">Spread your hand OPEN</p>
+                <p className="text-4xl font-bold text-amber-600">{calibCountdown}</p>
+              </>
+            )}
+            {calibStep === "open_hold" && (
+              <>
+                <p className="text-2xl">🖐️</p>
+                <p className="font-semibold text-amber-800">Hold still… reading open hand</p>
+                <div className="w-full bg-amber-200 rounded-full h-2 mt-2">
+                  <div className="bg-amber-500 h-2 rounded-full animate-pulse w-full" />
+                </div>
+              </>
+            )}
+            {calibStep === "closed" && (
+              <>
+                <p className="text-2xl">✊</p>
+                <p className="font-semibold text-amber-800">Make a FIST</p>
+                <p className="text-4xl font-bold text-amber-600">{calibCountdown}</p>
+              </>
+            )}
+            {calibStep === "closed_hold" && (
+              <>
+                <p className="text-2xl">✊</p>
+                <p className="font-semibold text-amber-800">Hold still… reading closed fist</p>
+                <div className="w-full bg-amber-200 rounded-full h-2 mt-2">
+                  <div className="bg-amber-500 h-2 rounded-full animate-pulse w-full" />
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Live readings ── */}
+        {connected && (
+          <div className="space-y-3 pt-2">
+            {FINGER_NAMES.map((name, i) => (
+              <div key={name}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">{name}</span>
+                  <span className="text-gray-400 text-xs">
+                    raw: {fingers[i]}
+                    {activeSession && (
+                      <span className="ml-2 font-medium text-gray-600">
+                        {bendPercents[i]}% bent
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-3">
+                  <div
+                    className="bg-indigo-500 h-3 rounded-full transition-all duration-100"
+                    style={{ width: `${bendPercents[i]}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-gray-500 font-mono">
+              acc {imuValues.slice(0, 3).map((v) => v.toFixed(0)).join(" / ")} mg · gyro{" "}
+              {imuValues.slice(3, 6).map((v) => v.toFixed(1)).join(" / ")} dps · mag{" "}
+              {imuValues.slice(6, 9).map((v) => v.toFixed(1)).join(" / ")} µT
+            </p>
+          </div>
+        )}
+
+        {/* ── Record ── */}
+        {connected && activeSession && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
+            <p className="font-medium text-indigo-800">Record a sample</p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="Label (e.g. A, HELLO, NONE)"
+                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                maxLength={LABEL_MAX}
+                disabled={recording}
+              />
+              <Segmented
+                options={SIGN_TYPE_OPTIONS}
+                value={signType}
+                onChange={selectSignType}
+                disabled={recording}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                Window
+                <input
+                  type="number"
+                  value={windowMs || ""}
+                  onChange={(e) => setWindowMs(Number(e.target.value))}
+                  min={MIN_WINDOW_MS}
+                  max={MAX_WINDOW_MS}
+                  step={100}
+                  className={`w-24 px-3 py-2 border rounded-lg text-sm bg-white ${
+                    windowValid ? "border-gray-300" : "border-red-400"
+                  }`}
+                  disabled={recording}
+                />
+                ms
+              </label>
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notes (optional)"
+                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                maxLength={NOTES_MAX}
+              />
+            </div>
+            {!windowValid && (
+              <p className="text-xs text-red-600">
+                Window must be between {MIN_WINDOW_MS} and {MAX_WINDOW_MS} ms.
+              </p>
+            )}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={recordSample}
+                disabled={recording || calibInProgress || !normalizedLabel || !windowValid}
+                className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {recPhase === "countdown"
+                  ? `Starting in ${recCountdown}…`
+                  : recPhase === "capturing"
+                    ? "Recording…"
+                    : "Record"}
+              </button>
+              {normalizedLabel && (
+                <span className="text-xs text-indigo-700">
+                  Next: {normalizedLabel} rep {nextRepNum} · {signType} · {windowMs} ms
+                </span>
+              )}
+            </div>
+            {recPhase === "countdown" && (
+              <p className="text-4xl font-bold text-indigo-600 text-center">{recCountdown}</p>
+            )}
+            {recPhase === "capturing" && (
+              <div className="w-full bg-indigo-100 rounded-full h-2">
+                <div
+                  className="bg-indigo-600 h-2 rounded-full"
+                  style={{ width: `${Math.round(recProgress * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Sample log ── */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-gray-700">Samples ({samples.length})</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={deleteLastSample}
+                disabled={!lastSample || recording}
+                className="px-3 py-1.5 rounded-md bg-white border border-slate-300 text-slate-800 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
+              >
+                Delete last sample
+                {lastSample && ` (${lastSample.label} rep ${lastSample.rep})`}
+              </button>
+              <button
+                type="button"
+                onClick={clearSavedData}
+                disabled={samples.length === 0 || recording}
+                className="px-3 py-1.5 rounded-md bg-white border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 disabled:opacity-50"
+              >
+                Clear saved data
+              </button>
+              <button
+                type="button"
+                onClick={downloadCsv}
+                disabled={samples.length === 0}
+                className="px-3 py-1.5 rounded-md bg-white border border-slate-300 text-slate-800 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
+              >
+                Download CSV
+              </button>
+            </div>
+          </div>
+          {samples.length > 0 && (
+            <ul className="max-h-64 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl text-sm">
               {[...samples].reverse().map((s) => (
-                <li
-                  key={`${s.localSessionId}-${s.letter}-${s.rep}-${s.timestamp}`}
-                  className="flex items-center justify-between px-3 py-2"
-                >
-                  <span className="text-gray-700">
-                    <span className="font-semibold text-indigo-600">{s.letter}</span> · rep {s.rep}
+                <li key={s.sample_id} className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="text-gray-700 min-w-0">
+                    <span className="font-bold text-indigo-600">{s.label}</span> · rep {s.rep}
                     <span className="ml-2 text-xs text-gray-500">
-                      {s.participantId} · {new Date(s.timestamp).toLocaleTimeString()}
+                      {s.sign_type} · {s.frames.length} frames · {Math.round(sampleRateHz(s))} Hz
+                    </span>
+                    <span className="ml-2 text-xs text-gray-400">
+                      {new Date(s.recorded_at).toLocaleTimeString()}
                     </span>
                   </span>
-                  <span className={`text-xs ${s.synced ? "text-green-700" : "text-gray-400"}`}>
-                    {s.synced ? "synced" : "this browser only"}
+                  <span className="flex flex-wrap justify-end gap-1 shrink-0">
+                    {sampleWarnings(s).map((w) => (
+                      <span
+                        key={w}
+                        className="px-2 py-0.5 rounded-md text-xs font-medium bg-amber-50 text-amber-700"
+                      >
+                        {w}
+                      </span>
+                    ))}
                   </span>
                 </li>
               ))}
             </ul>
-          </details>
-        )}
-      </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

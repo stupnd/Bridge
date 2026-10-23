@@ -1,71 +1,33 @@
 /**
- * Recorded glove samples, shared by the Collect page's recorder and Movement Lab.
- * Kept in localStorage so a refresh mid-session doesn't lose local-only data.
+ * Collect-page samples reduced to what Movement Lab needs: a label, whether
+ * the sign moves, and the features of its frame window.
  */
-import { useSyncExternalStore } from "react";
-import type { Features, Frame } from "./imu";
+import type { CollectData } from "./collectData";
+import { computeFeatures, Features, Frame } from "./imu";
 
 export type Recording = {
-  timestamp: string;
-  dbSessionId: number | null;
-  localSessionId: string;
-  participantId: string;
   letter: string;
-  rep: number;
   mode: "static" | "movement";
-  /** Window averages, same as the Supabase raw_f / pct_f columns. */
-  raw: number[];
-  pct: number[];
-  notes: string;
-  synced: boolean;
-  /** Every packet in the window; `t` is ms from the window start. */
-  frames: Frame[];
   features: Features;
 };
 
-const STORAGE_KEY = "bridge-recordings-v1";
-
-let recordings: Recording[] = load();
-let persistError: string | null = null;
-const listeners = new Set<() => void>();
-
-function load(): Recording[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Recording[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function save() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(recordings));
-    persistError = null;
-  } catch (e) {
-    // Usually the ~5 MB quota. Data stays in memory; download the CSVs before refreshing.
-    persistError = e instanceof Error ? e.message : "could not save";
-  }
-}
-
-export function getRecordings(): Recording[] {
-  return recordings;
-}
-
-export function setRecordings(update: (prev: Recording[]) => Recording[]) {
-  recordings = update(recordings);
-  save();
-  listeners.forEach((fn) => fn());
-}
-
-function subscribe(fn: () => void) {
-  listeners.add(fn);
-  return () => {
-    listeners.delete(fn);
-  };
-}
-
-export function useRecordings(): { recordings: Recording[]; persistError: string | null } {
-  const list = useSyncExternalStore(subscribe, getRecordings);
-  return { recordings: list, persistError };
+export function recordingsFromCollectData(data: CollectData): Recording[] {
+  const sessions = new Map(data.sessions.map((s) => [s.session_id, s]));
+  return data.samples
+    .filter((s) => s.frames.length > 0)
+    .map((s) => {
+      const session = sessions.get(s.session_id);
+      const frames: Frame[] = s.frames.map((f) => ({
+        t: f.t_ms,
+        fingers: f.raw,
+        acc: [f.imu[0], f.imu[1], f.imu[2]],
+        gyr: [f.imu[3], f.imu[4], f.imu[5]],
+        mag: [f.imu[6], f.imu[7], f.imu[8]],
+      }));
+      return {
+        letter: s.label,
+        mode: s.sign_type === "moving" ? "movement" : "static",
+        features: computeFeatures(frames, session ? { open: session.open, closed: session.closed } : null),
+      };
+    });
 }
