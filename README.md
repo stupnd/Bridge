@@ -12,6 +12,7 @@ Glove (Arduino Nano ESP32)                     Web app (browser)                
 
 - **Glove firmware** (`ESP32/esp32`) streams five finger bends and 9-axis motion over Bluetooth Low Energy.
 - **Web app** (`frontend`) connects with Web Bluetooth, calibrates to the wearer's hand, and recognizes letters with a nearest-neighbour model trained on recorded samples. Supabase handles sign-in.
+- **Database** (`supabase`): Supabase sign-in plus a team-only dataset of recordings, with row-level security. See `supabase/README.md`.
 - **Raspberry Pi** (`RaspPi`) receives the same packets and speaks text with offline text-to-speech (Piper).
 
 ## Web app

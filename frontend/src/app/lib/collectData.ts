@@ -41,6 +41,8 @@ export type CollectSample = {
   recorded_at: string;
   notes: string;
   frames: CollectFrame[];
+  /** True once it's in the team's Supabase dataset. */
+  uploaded?: boolean;
 };
 
 export type CollectData = {

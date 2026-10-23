@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from "react";
-import { Database, Download, Plus, RotateCcw, Shuffle, Upload, X } from "lucide-react";
+import { Database, Download, Plus, RotateCcw, Shuffle, Upload, Users, X } from "lucide-react";
 import { useSensor } from "../context/SensorContext";
 import { Button, Card, GloveGate, Page, PageHeader } from "../components/common";
 import HandDiagram from "../components/HandDiagram";
 import TeachHand from "../components/TeachHand";
 import { loadCollectData } from "../lib/collectStorage";
+import { fetchTeamData } from "../lib/teamRecordings";
 import { FINGER_NAMES } from "../lib/asl";
 import {
   classify,
@@ -315,6 +316,18 @@ function TrainingData({ model, bends }: { model: SignModel; bends: number[] }) {
     }
   }
 
+  async function importTeam() {
+    try {
+      setMsg({ ok: true, text: "Loading the team dataset…" });
+      const samples = samplesFromCollectData(await fetchTeamData());
+      if (!samples.length) throw new Error("The team dataset has no static or rest samples yet (or this account isn't on the team).");
+      setModel((m) => ({ ...m, samples: [...m.samples, ...samples] }));
+      setMsg({ ok: true, text: `Added ${samples.length} samples from the team dataset.` });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't load the team dataset." });
+    }
+  }
+
   function exportCsv() {
     const blob = new Blob([samplesToCsv(model.samples)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -330,6 +343,9 @@ function TrainingData({ model, bends }: { model: SignModel; bends: number[] }) {
       description={`${model.samples.length} samples. The recognizer is only as good as these: record more reps per letter to make it sturdier.`}
       action={
         <div className="flex flex-wrap justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={importTeam}>
+            <Users className="h-3.5 w-3.5" /> Add from team
+          </Button>
           <Button variant="ghost" size="sm" onClick={importCollect}>
             <Database className="h-3.5 w-3.5" /> Add from Collect
           </Button>
