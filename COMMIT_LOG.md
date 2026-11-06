@@ -2,6 +2,271 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-06 10:25 — Stuti Pandya · [`5e87d0d`](https://github.com/stupnd/Bridge/commit/5e87d0dffe95966b3e5a3571c1c2daf9a0b70d8f) · pushed by @stupnd
+
+**Redesign the frontend: new landing page, login, and app pages**
+
+Adds a landing page, wordmark, and team roadmap page, and restyles login,
+translate, learn, collect, lab, glove, and profile around a shared theme.
+
+Files changed (42):
+- `.gitignore` (+4 / −0)
+- `frontend/.env.capture` (+1 / −0)
+- `frontend/PRODUCT.md` (+56 / −0)
+- `frontend/index.html` (+4 / −1)
+- `frontend/package-lock.json` (+18 / −0)
+- `frontend/package.json` (+2 / −0)
+- `frontend/src/app/components/Calibration.tsx` (+87 / −13)
+- `frontend/src/app/components/DataCollector.tsx` (+469 / −321)
+- `frontend/src/app/components/FingerBars.tsx` (+17 / −10)
+- `frontend/src/app/components/GloveStatus.tsx` (+7 / −6)
+- `frontend/src/app/components/HandDiagram.tsx` (+40 / −65)
+- `frontend/src/app/components/Layout.tsx` (+22 / −19)
+- `frontend/src/app/components/MotionLab.tsx` (+65 / −56)
+- `frontend/src/app/components/ProtectedRoute.tsx` (+6 / −2)
+- `frontend/src/app/components/TeachHand.tsx` (+30 / −30)
+- `frontend/src/app/components/Wordmark.tsx` (+17 / −0)
+- `frontend/src/app/components/common.tsx` (+35 / −40)
+- `frontend/src/app/components/landing/Pipeline.tsx` (+112 / −0)
+- `frontend/src/app/components/landing/SpellingHand.tsx` (+169 / −0)
+- `frontend/src/app/components/landing/TryGlove.tsx` (+106 / −0)
+- `frontend/src/app/components/ui/dialog.tsx` (+6 / −6)
+- `frontend/src/app/content/landing.ts` (+159 / −0)
+- `frontend/src/app/content/roadmap.ts` (+360 / −0)
+- `frontend/src/app/context/SensorContext.tsx` (+90 / −25)
+- `frontend/src/app/lib/fingers.ts` (+16 / −0)
+- `frontend/src/app/lib/flexCalibrationStorage.ts` (+9 / −1)
+- `frontend/src/app/lib/gloveSimulator.ts` (+3 / −2)
+- `frontend/src/app/lib/handGeometry.ts` (+54 / −0)
+- `frontend/src/app/lib/imu.ts` (+2 / −2)
+- `frontend/src/app/pages/Collect.tsx` (+3 / −3)
+- `frontend/src/app/pages/Glove.tsx` (+89 / −62)
+- `frontend/src/app/pages/Lab.tsx` (+299 / −203)
+- `frontend/src/app/pages/Landing.tsx` (+259 / −0)
+- `frontend/src/app/pages/Learn.tsx` (+152 / −82)
+- `frontend/src/app/pages/Login.tsx` (+103 / −60)
+- `frontend/src/app/pages/Profile.tsx` (+127 / −24)
+- `frontend/src/app/pages/Todo.tsx` (+147 / −0)
+- `frontend/src/app/pages/Translate.tsx` (+134 / −42)
+- `frontend/src/app/routes.tsx` (+7 / −0)
+- `frontend/src/styles/theme.css` (+139 / −153)
+- `frontend/src/vite-env.d.ts` (+2 / −0)
+- `frontend/vite.config.ts` (+25 / −3)
+
+### 2026-10-23 11:31 — Stuti Pandya · [`5ec7eec`](https://github.com/stupnd/Bridge/commit/5ec7eec9c97a959753fffee814ecfefc6c82d8a2) · pushed by @stupnd
+
+**Replace prototype Supabase tables with a team-only recordings dataset**
+
+- Migrations for team_members, recording_sessions and recordings with
+  row-level security: signed-out visitors see nothing, team members read
+  everything and write only their own rows
+- Collect uploads each sample to the team dataset and retries anything pending
+- Lab can train on the whole team's recordings
+- Typed Supabase client generated from the schema
+
+Files changed (10):
+- `README.md` (+1 / −0)
+- `frontend/src/app/components/DataCollector.tsx` (+99 / −2)
+- `frontend/src/app/lib/collectData.ts` (+2 / −0)
+- `frontend/src/app/lib/teamRecordings.ts` (+102 / −0)
+- `frontend/src/app/pages/Lab.tsx` (+17 / −1)
+- `frontend/src/database.types.ts` (+135 / −0)
+- `frontend/src/supabaseClient.ts` (+2 / −1)
+- `supabase/README.md` (+24 / −0)
+- `supabase/migrations/20261023152800_recordings_schema.sql` (+125 / −0)
+- `supabase/migrations/20261023152902_revoke_unused_grants.sql` (+3 / −0)
+
+### 2026-10-23 11:15 — Stuti Pandya · [`c5db4a4`](https://github.com/stupnd/Bridge/commit/c5db4a46ec295fdf8e6cf9225e3238949edffc01) · pushed by @stupnd
+
+**Ignore Vercel link files**
+
+Files changed (1):
+- `.gitignore` (+5 / −1)
+
+### 2026-10-23 11:11 — Stuti Pandya · [`56f1a59`](https://github.com/stupnd/Bridge/commit/56f1a5961716406124126a845279379f5378e4f0) · pushed by @stupnd
+
+**Clean up the frontend for deployment**
+
+- Remove 46 unused Figma/shadcn components and 40 unused packages
+- Upgrade Vite to 6.4.4; npm audit is clean
+- Read Supabase settings from env vars (.env.example) instead of source
+- Stop tracking build output; add Vercel SPA rewrite, favicon and page title
+- Add a README and a CI check that type-checks and builds the frontend
+
+Files changed (63):
+- `.github/workflows/frontend.yml` (+29 / −0)
+- `README.md` (+50 / −0)
+- `frontend/.env.example` (+4 / −0)
+- `frontend/.gitignore` (+3 / −0)
+- `frontend/ATTRIBUTIONS.md` (+1 / −3)
+- `frontend/README.md` (+0 / −11)
+- `frontend/dist/assets/index-B4Zaqk_m.js` (+0 / −132)
+- `frontend/dist/assets/index-LzwFKSW3.css` (+0 / −1)
+- `frontend/dist/index.html` (+0 / −16)
+- `frontend/guidelines/Guidelines.md` (+0 / −61)
+- `frontend/index.html` (+15 / −15)
+- `frontend/package-lock.json` (+453 / −2924)
+- `frontend/package.json` (+7 / −64)
+- `frontend/public/favicon.svg` (+1 / −0)
+- `frontend/src/app/components/figma/ImageWithFallback.tsx` (+0 / −27)
+- `frontend/src/app/components/ui/accordion.tsx` (+0 / −66)
+- `frontend/src/app/components/ui/alert-dialog.tsx` (+0 / −157)
+- `frontend/src/app/components/ui/alert.tsx` (+0 / −66)
+- `frontend/src/app/components/ui/aspect-ratio.tsx` (+0 / −11)
+- `frontend/src/app/components/ui/avatar.tsx` (+0 / −53)
+- `frontend/src/app/components/ui/badge.tsx` (+0 / −46)
+- `frontend/src/app/components/ui/breadcrumb.tsx` (+0 / −109)
+- `frontend/src/app/components/ui/button.tsx` (+0 / −58)
+- `frontend/src/app/components/ui/calendar.tsx` (+0 / −75)
+- `frontend/src/app/components/ui/card.tsx` (+0 / −92)
+- `frontend/src/app/components/ui/carousel.tsx` (+0 / −241)
+- `frontend/src/app/components/ui/chart.tsx` (+0 / −353)
+- `frontend/src/app/components/ui/checkbox.tsx` (+0 / −32)
+- `frontend/src/app/components/ui/collapsible.tsx` (+0 / −33)
+- `frontend/src/app/components/ui/command.tsx` (+0 / −177)
+- `frontend/src/app/components/ui/context-menu.tsx` (+0 / −252)
+- `frontend/src/app/components/ui/drawer.tsx` (+0 / −132)
+- `frontend/src/app/components/ui/dropdown-menu.tsx` (+0 / −257)
+- `frontend/src/app/components/ui/form.tsx` (+0 / −168)
+- `frontend/src/app/components/ui/hover-card.tsx` (+0 / −44)
+- `frontend/src/app/components/ui/input-otp.tsx` (+0 / −77)
+- `frontend/src/app/components/ui/input.tsx` (+0 / −21)
+- `frontend/src/app/components/ui/label.tsx` (+0 / −24)
+- `frontend/src/app/components/ui/menubar.tsx` (+0 / −276)
+- `frontend/src/app/components/ui/navigation-menu.tsx` (+0 / −168)
+- `frontend/src/app/components/ui/pagination.tsx` (+0 / −127)
+- `frontend/src/app/components/ui/popover.tsx` (+0 / −48)
+- `frontend/src/app/components/ui/progress.tsx` (+0 / −31)
+- `frontend/src/app/components/ui/radio-group.tsx` (+0 / −45)
+- `frontend/src/app/components/ui/resizable.tsx` (+0 / −56)
+- `frontend/src/app/components/ui/scroll-area.tsx` (+0 / −58)
+- `frontend/src/app/components/ui/select.tsx` (+0 / −189)
+- `frontend/src/app/components/ui/separator.tsx` (+0 / −28)
+- `frontend/src/app/components/ui/sheet.tsx` (+0 / −139)
+- `frontend/src/app/components/ui/sidebar.tsx` (+0 / −726)
+- `frontend/src/app/components/ui/skeleton.tsx` (+0 / −13)
+- `frontend/src/app/components/ui/slider.tsx` (+0 / −63)
+- `frontend/src/app/components/ui/sonner.tsx` (+0 / −25)
+- `frontend/src/app/components/ui/switch.tsx` (+0 / −31)
+- `frontend/src/app/components/ui/table.tsx` (+0 / −116)
+- `frontend/src/app/components/ui/tabs.tsx` (+0 / −66)
+- `frontend/src/app/components/ui/textarea.tsx` (+0 / −18)
+- `frontend/src/app/components/ui/toggle-group.tsx` (+0 / −73)
+- `frontend/src/app/components/ui/toggle.tsx` (+0 / −47)
+- `frontend/src/app/components/ui/tooltip.tsx` (+0 / −61)
+- `frontend/src/app/components/ui/use-mobile.ts` (+0 / −21)
+- `frontend/src/supabaseClient.ts` (+5 / −4)
+- `frontend/vercel.json` (+4 / −0)
+
+### 2026-10-23 10:56 — Stuti Pandya · [`01ab70a`](https://github.com/stupnd/Bridge/commit/01ab70a97e5aef34776ab46cd979e731947c3b82) · pushed by @stupnd
+
+**Smooth predictions, flag unsure letters, and add guided hand recording**
+
+- Translate and Learn vote over the last 300 ms so the letter doesn't flicker
+- Report "unsure" (e.g. "E or S?") instead of typing when the two closest
+  letters are too alike; threshold adjustable in the Lab
+- Lab imports the Collect page's frames CSV and its saved samples directly
+- "Teach it your hand": guided recording of every static letter for the wearer
+- Robustness test separates wrong letters from unsure/no-letter results
+
+Files changed (6):
+- `frontend/src/app/components/MotionLab.tsx` (+1 / −1)
+- `frontend/src/app/components/TeachHand.tsx` (+189 / −0)
+- `frontend/src/app/lib/signModel.ts` (+101 / −10)
+- `frontend/src/app/pages/Lab.tsx` (+60 / −10)
+- `frontend/src/app/pages/Learn.tsx` (+10 / −4)
+- `frontend/src/app/pages/Translate.tsx` (+14 / −12)
+
+### 2026-10-23 10:51 — Stuti Pandya · [`1e299f3`](https://github.com/stupnd/Bridge/commit/1e299f3ae8c775187b8df9e20930d625a512eeb8) · pushed by @stupnd
+
+**Merge main: Krisha's Collect page, Raspberry Pi TTS**
+
+Keep Krisha's recorder (frame-by-frame capture, IndexedDB autosave, simulator)
+and combine it with the shared calibration, bends and render throttling in
+SensorContext. Movement Lab now reads the Collect page's samples.
+
+Files changed (20):
+- `.gitignore` (+4 / −0)
+- `COMMIT_LOG.md` (+63 / −0)
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/Raspberry Pi Setup/watcher.py` (+196 / −0)
+- `RaspPi/package-export.txt` (+26 / −0)
+- `RaspPi/tts-test/main.py` (+4 / −0)
+- `RaspPi/tts-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/tts-test/modules/bluetooth.py` (+59 / −0)
+- `RaspPi/tts-test/modules/tts.py` (+47 / −0)
+- `RaspPi/tts-test/requirements.txt` (binary)
+- `frontend/src/app/components/DataCollector.tsx` (+559 / −403)
+- `frontend/src/app/components/MotionLab.tsx` (+2 / −3)
+- `frontend/src/app/context/SensorContext.tsx` (+96 / −35)
+- `frontend/src/app/lib/captureFrames.ts` (+44 / −0)
+- `frontend/src/app/lib/collectData.ts` (+159 / −0)
+- `frontend/src/app/lib/collectStorage.ts` (+46 / −0)
+- `frontend/src/app/lib/gloveSimulator.ts` (+35 / −0)
+- `frontend/src/app/lib/recordings.ts` (+23 / −61)
+- `frontend/src/app/pages/Collect.tsx` (+9 / −3)
+- `frontend/src/app/pages/Profile.tsx` (+3 / −3)
+
+### 2026-10-23 10:42 — Stuti Pandya · [`e4af3b9`](https://github.com/stupnd/Bridge/commit/e4af3b9e92974e3443120dcfbe5883115ff1d50f) · pushed by @stupnd
+
+**Learn letter recognition from samples and add a Lab page**
+
+- Replace hard-coded finger rules with a nearest-neighbour model trained
+  on recorded samples (bundled asl-samples.csv); recognizes all 24 static letters
+- Translate and Learn practice use the shared model, with confidence and hints
+- New Lab page: virtual glove sliders, live glove input, prediction breakdown,
+  editable training data (add sample, CSV import/export) and a robustness test
+- Restructure the app into Translate, Learn, Glove, Collect and Lab pages
+
+Files changed (29):
+- `frontend/package-lock.json` (+0 / −18)
+- `frontend/src/app/components/Calibration.tsx` (+73 / −0)
+- `frontend/src/app/components/DataCollector.tsx` (+286 / −296)
+- `frontend/src/app/components/FingerBars.tsx` (+30 / −0)
+- `frontend/src/app/components/FlexSensor.tsx` (+0 / −601)
+- `frontend/src/app/components/GloveStatus.tsx` (+33 / −0)
+- `frontend/src/app/components/HandDiagram.tsx` (+99 / −0)
+- `frontend/src/app/components/HandVisualizer.tsx` (+0 / −520)
+- `frontend/src/app/components/Layout.tsx` (+59 / −71)
+- `frontend/src/app/components/MotionLab.tsx` (+356 / −0)
+- `frontend/src/app/components/common.tsx` (+120 / −0)
+- `frontend/src/app/context/SensorContext.tsx` (+90 / −3)
+- `frontend/src/app/data/asl-samples.csv` (+25 / −0)
+- `frontend/src/app/lib/asl.ts` (+88 / −0)
+- `frontend/src/app/lib/imu.ts` (+254 / −0)
+- `frontend/src/app/lib/learnProgress.ts` (+63 / −0)
+- `frontend/src/app/lib/recordings.ts` (+71 / −0)
+- `frontend/src/app/lib/signModel.ts` (+233 / −0)
+- `frontend/src/app/pages/Collect.tsx` (+11 / −9)
+- `frontend/src/app/pages/Dashboard.tsx` (+0 / −231)
+- `frontend/src/app/pages/Glove.tsx` (+147 / −0)
+- `frontend/src/app/pages/Lab.tsx` (+441 / −0)
+- `frontend/src/app/pages/Learn.tsx` (+370 / −113)
+- `frontend/src/app/pages/Login.tsx` (+20 / −10)
+- `frontend/src/app/pages/Profile.tsx` (+59 / −97)
+- `frontend/src/app/pages/Sensor.tsx` (+0 / −19)
+- `frontend/src/app/pages/Translate.tsx` (+111 / −0)
+- `frontend/src/app/routes.tsx` (+11 / −8)
+- `frontend/src/supabase.tsx` (+0 / −323)
+
+### 2026-10-23 10:42 — Stuti Pandya · [`e624708`](https://github.com/stupnd/Bridge/commit/e6247083e5b8dd65f9410686a88247a81a95a65a) · pushed by @stupnd
+
+**Stream 9-axis data from the glove and add IMU test tools**
+
+- Main firmware sends flex + ICM-20948 readings in one 56-byte BLE packet at ~50 Hz
+- Pinky moved to D2 (ADC1) to avoid ADC2 noise while BLE is on
+- IMU auto-detects its I2C address and reconnects if it drops out
+- Add a browser visualizer for the 9-axis test sketch
+- Add a two-hand IMU sketch and an I2C wiring check sketch
+
+Files changed (6):
+- `ESP32/9-axis-test/9-axis-test.ino` (+35 / −12)
+- `ESP32/9-axis-test/visualizer.html` (+438 / −0)
+- `ESP32/esp32/esp32.ino` (+127 / −53)
+- `ESP32/i2c-pincheck/i2c-pincheck.ino` (+59 / −0)
+- `ESP32/two-hands/two-hands.html` (+662 / −0)
+- `ESP32/two-hands/two-hands.ino` (+112 / −0)
+
 ### 2026-10-16 12:19 — Krisha · [`22ecfa1`](https://github.com/stupnd/Bridge/commit/22ecfa10630fc688049d97a78a5158f4d39c4f6e) · pushed by @KrishaVeera
 
 **Collect page: frame-by-frame recording for all sign types, CSV export, IndexedDB autosave**
