@@ -2,11 +2,12 @@ import { useMemo, useRef, useState } from "react";
 import { Database, Download, Plus, RotateCcw, Shuffle, Upload, Users, X } from "lucide-react";
 import { useSensor } from "../context/SensorContext";
 import { Button, Card, GloveGate, Page, PageHeader } from "../components/common";
+import FingerBars from "../components/FingerBars";
 import HandDiagram from "../components/HandDiagram";
 import TeachHand from "../components/TeachHand";
 import { loadCollectData } from "../lib/collectStorage";
 import { fetchTeamData } from "../lib/teamRecordings";
-import { FINGER_NAMES } from "../lib/asl";
+import { FINGERS, fingerTint } from "../lib/fingers";
 import {
   classify,
   leaveOneOut,
@@ -30,6 +31,9 @@ const RELAXED = [0.1, 0.1, 0.1, 0.1, 0.1];
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
+/** Neutral border for inputs and chips that need more weight than a hairline. */
+const CONTROL_BORDER = "border-[#cfcac1]";
+
 export default function Lab() {
   const model = useSignModel();
   const { bends: liveBends } = useSensor();
@@ -45,19 +49,19 @@ export default function Lab() {
         description="Test the letter recognizer with a virtual glove or the real one, and edit the samples it learns from."
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         <Card
           title="Hand"
           action={
-            <div role="tablist" aria-label="Input" className="inline-flex rounded-lg bg-gray-100 p-1">
+            <div role="tablist" aria-label="Input" className="inline-flex shrink-0 rounded-[var(--radius-control)] bg-wash p-1">
               {(["virtual", "live"] as const).map((s) => (
                 <button
                   key={s}
                   role="tab"
                   aria-selected={source === s}
                   onClick={() => setSource(s)}
-                  className={`rounded-md px-3 py-1 text-sm transition-colors ${
-                    source === s ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                  className={`min-h-11 rounded-[8px] px-3 text-sm font-semibold transition-colors duration-150 ease-out sm:min-h-9 ${
+                    source === s ? "border border-hairline bg-surface text-ink" : "border border-transparent text-ink-muted hover:text-ink"
                   }`}
                 >
                   {s === "virtual" ? "Virtual glove" : "Live glove"}
@@ -70,17 +74,10 @@ export default function Lab() {
             <VirtualGlove bends={virtual} onChange={setVirtual} model={model} />
           ) : (
             <GloveGate what="test with your real hand">
-              <div className="flex justify-center">
-                <HandDiagram bends={liveBends} className="w-40" label="Live view of your hand" />
+              <div className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
+                <HandDiagram bends={liveBends} className="mx-auto w-36 sm:w-40" label="Live view of your hand" />
+                <FingerBars bends={liveBends} />
               </div>
-              <ul className="mt-4 grid grid-cols-5 gap-1 text-center text-xs tabular-nums">
-                {FINGER_NAMES.map((name, i) => (
-                  <li key={name} className="rounded-md bg-gray-50 py-1.5">
-                    <span className="block text-gray-500">{name}</span>
-                    <span className="font-medium text-gray-800">{pct(liveBends[i])}</span>
-                  </li>
-                ))}
-              </ul>
             </GloveGate>
           )}
         </Card>
@@ -97,10 +94,67 @@ export default function Lab() {
   );
 }
 
+// ── Sliders ─────────────────────────────────────────────────────────────────
+
+/**
+ * A native range drawn over a track: the input stays for keyboard and touch,
+ * only its thumb shows (.try-range in theme.css). `color` is a finger's ink for
+ * finger sliders, or plain ink for settings.
+ */
+function InkRange({
+  value,
+  min,
+  max,
+  onChange,
+  color = "var(--ink)",
+  track = "var(--wash)",
+  thick = false,
+  ariaLabel,
+  className = "",
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  color?: string;
+  track?: string;
+  thick?: boolean;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  const fill = (value - min) / (max - min);
+  const y = thick ? 1.7 : 1;
+  return (
+    <span className={`relative block h-7 ${className}`}>
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-[11px] h-1.5 rounded-full transition-transform duration-150 ease-out"
+        style={{ transform: `scaleY(${y})`, background: track }}
+      />
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-[11px] h-1.5 origin-left rounded-full transition-transform duration-150 ease-out"
+        style={{ transform: `scale(${fill}, ${y})`, background: color }}
+      />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="try-range absolute inset-0 w-full"
+        style={{ ["--thumb-color" as string]: color }}
+        {...(ariaLabel ? { "aria-label": ariaLabel } : {})}
+      />
+    </span>
+  );
+}
+
 // ── Virtual glove ───────────────────────────────────────────────────────────
 
 function VirtualGlove({ bends, onChange, model }: { bends: number[]; onChange: (b: number[]) => void; model: SignModel }) {
   const [noise, setNoise] = useState(0.1);
+  const [hot, setHot] = useState<number | null>(null);
   const letters = modelLetters(model);
 
   function loadLetter(letter: string) {
@@ -111,58 +165,67 @@ function VirtualGlove({ bends, onChange, model }: { bends: number[]; onChange: (
   return (
     <div>
       <div className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
-        <HandDiagram bends={bends} className="mx-auto w-36" label="Virtual hand" />
+        <HandDiagram bends={bends} className="mx-auto w-36 sm:w-40" label="Virtual hand" />
         <div className="space-y-3">
-          {FINGER_NAMES.map((name, i) => (
-            <label key={name} className="block">
-              <span className="mb-1 flex justify-between text-sm">
-                <span className="text-gray-600">{name}</span>
-                <span className="tabular-nums text-gray-500">{pct(bends[i])} bent</span>
+          {FINGERS.map((f, i) => (
+            <label
+              key={f.key}
+              className="block"
+              onMouseEnter={() => setHot(i)}
+              onMouseLeave={() => setHot(null)}
+              onFocus={() => setHot(i)}
+              onBlur={() => setHot(null)}
+            >
+              <span className="mb-0.5 flex justify-between text-sm">
+                <span className="font-semibold text-ink">{f.name}</span>
+                <span className="tabular text-ink-muted">{pct(bends[i])} bent</span>
               </span>
-              <input
-                type="range"
+              <InkRange
+                value={Math.round(bends[i] * 100)}
                 min={0}
                 max={100}
-                value={Math.round(bends[i] * 100)}
-                onChange={(e) => onChange(bends.map((b, k) => (k === i ? Number(e.target.value) / 100 : b)))}
-                className="w-full accent-indigo-600"
+                onChange={(v) => onChange(bends.map((b, k) => (k === i ? v / 100 : b)))}
+                color={f.color}
+                track={fingerTint(f.color, 22)}
+                thick={hot === i}
+                ariaLabel={`${f.name} bend`}
               />
             </label>
           ))}
         </div>
       </div>
 
-      <div className="mt-5 border-t border-gray-100 pt-4">
-        <p className="mb-2 text-sm text-gray-600">Start from a recorded letter</p>
-        <div className="flex flex-wrap gap-1">
+      <div className="mt-6 border-t border-hairline pt-5">
+        <p className="mb-2 text-sm text-ink-muted">Start from a recorded letter</p>
+        <div className="flex flex-wrap gap-1.5">
           {letters.map((l) => (
             <button
               key={l}
               onClick={() => loadLetter(l)}
-              className="h-8 w-8 rounded-md border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="h-11 w-11 rounded-[var(--radius-control)] border border-hairline bg-ground font-display text-lg font-bold text-ink transition-colors duration-150 ease-out hover:border-ink sm:h-10 sm:w-10"
             >
               {l}
             </button>
           ))}
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
           <Button
             variant="secondary"
             size="sm"
+            className="max-sm:h-11"
             onClick={() => onChange(bends.map((b) => clamp01(b + (Math.random() * 2 - 1) * noise)))}
           >
-            <Shuffle className="h-3.5 w-3.5" /> Wiggle ±{pct(noise)}
+            <Shuffle className="h-3.5 w-3.5" aria-hidden /> Wiggle ±{pct(noise)}
           </Button>
-          <input
-            type="range"
+          <InkRange
+            value={Math.round(noise * 100)}
             min={0}
             max={30}
-            value={Math.round(noise * 100)}
-            onChange={(e) => setNoise(Number(e.target.value) / 100)}
-            aria-label="Wiggle amount"
-            className="w-28 accent-indigo-600"
+            onChange={(v) => setNoise(v / 100)}
+            ariaLabel="Wiggle amount"
+            className="w-28"
           />
-          <Button variant="ghost" size="sm" onClick={() => onChange(RELAXED)}>
+          <Button variant="ghost" size="sm" className="max-sm:h-11" onClick={() => onChange(RELAXED)}>
             Relax hand
           </Button>
         </div>
@@ -180,84 +243,97 @@ function Prediction({ model, result }: { model: SignModel; result: ReturnType<ty
 
   return (
     <Card title="Prediction" description="Nearest recorded sample, measured as the average difference per finger.">
-      <div className="flex items-center gap-6" aria-live="polite">
+      <div className="flex items-center gap-5 sm:gap-6" aria-live="polite">
         <span
-          className={`w-24 text-center text-7xl font-semibold ${
-            result.label ? "text-indigo-600" : result.status === "unsure" ? "text-amber-400" : "text-gray-200"
+          className={`flex h-28 w-28 shrink-0 items-center justify-center rounded-[var(--radius-card)] font-display text-[4.5rem] font-extrabold leading-none ${
+            result.label
+              ? "bg-ground text-ink"
+              : result.status === "unsure"
+                ? "bg-warn-wash text-warn"
+                : "bg-ground text-ink-faint"
           }`}
         >
           {result.label ?? (result.status === "unsure" ? `${result.ranked[0].label}?` : "–")}
         </span>
-        <div className="text-sm">
+        <div className="min-w-0 text-sm">
           {result.status === "letter" ? (
             <>
-              <p className="text-gray-900">{Math.round(result.confidence * 100)}% sure</p>
-              <p className="text-gray-500">How much closer it is than the next letter</p>
+              <p className="tabular font-display text-heading text-ink">{Math.round(result.confidence * 100)}% sure</p>
+              <p className="mt-0.5 text-ink-muted">How much closer it is than the next letter</p>
             </>
           ) : result.status === "rest" ? (
-            <p className="text-gray-600">Resting hand</p>
+            <p className="font-display text-heading text-ink">Resting hand</p>
           ) : result.status === "unsure" ? (
-            <p className="text-amber-700">
-              Unsure: {result.ranked[0].label} or {result.ranked[1].label}? Only{" "}
-              {Math.round(result.confidence * 100)}% sure, under the {pct(model.minConfidence)} minimum.
-            </p>
+            <>
+              <p className="font-display text-heading text-warn">
+                Unsure: {result.ranked[0].label} or {result.ranked[1].label}?
+              </p>
+              <p className="tabular mt-0.5 text-ink-muted">
+                Only {Math.round(result.confidence * 100)}% sure, under the {pct(model.minConfidence)} minimum.
+              </p>
+            </>
           ) : (
-            <p className="text-gray-600">
-              No letter: the closest ({closest?.label ?? "none"}) is {closest ? pct(closest.distance) : "–"} off,
-              over the {pct(model.maxDistance)} limit.
-            </p>
+            <>
+              <p className="font-display text-heading text-ink">No letter</p>
+              <p className="tabular mt-0.5 text-ink-muted">
+                The closest ({closest?.label ?? "none"}) is {closest ? pct(closest.distance) : "–"} off, over the{" "}
+                {pct(model.maxDistance)} limit.
+              </p>
+            </>
           )}
         </div>
       </div>
 
-      <ul className="mt-5 space-y-2">
-        {top.map((r) => (
-          <li key={r.label} className="flex items-center gap-3 text-sm">
-            <span className="w-12 font-semibold text-gray-800">{r.label === REST_LABEL ? "Rest" : r.label}</span>
-            <div className="relative h-2 flex-1 rounded-full bg-gray-100">
-              <div
-                className={`h-full rounded-full ${r.distance <= model.maxDistance ? "bg-indigo-500" : "bg-gray-300"}`}
-                style={{ width: `${Math.max(2, (1 - r.distance / scale) * 100)}%` }}
-              />
-            </div>
-            <span className="w-14 text-right tabular-nums text-gray-500">{pct(r.distance)} off</span>
-          </li>
-        ))}
+      <p className="mt-6 text-sm text-ink-muted">Closest letters</p>
+      <ul className="mt-2 space-y-2.5">
+        {top.map((r) => {
+          const within = r.distance <= model.maxDistance;
+          return (
+            <li key={r.label} className="flex items-center gap-3 text-sm">
+              <span className="w-12 font-display text-base font-bold text-ink">{r.label === REST_LABEL ? "Rest" : r.label}</span>
+              <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-wash">
+                <div
+                  className={`h-full origin-left rounded-full transition-transform duration-150 ease-out ${within ? "bg-ink" : "bg-[#cfcac1]"}`}
+                  style={{ transform: `scaleX(${Math.max(0.02, 1 - r.distance / scale)})` }}
+                />
+              </div>
+              <span className={`tabular w-16 text-right ${within ? "text-ink" : "text-ink-muted"}`}>{pct(r.distance)} off</span>
+            </li>
+          );
+        })}
       </ul>
 
-      <label className="mt-5 block border-t border-gray-100 pt-4">
-        <span className="mb-1 flex justify-between text-sm">
-          <span className="text-gray-600">Reject matches further than</span>
-          <span className="tabular-nums text-gray-500">{pct(model.maxDistance)}</span>
-        </span>
-        <input
-          type="range"
-          min={5}
-          max={50}
-          value={Math.round(model.maxDistance * 100)}
-          onChange={(e) => setModel((m) => ({ ...m, maxDistance: Number(e.target.value) / 100 }))}
-          className="w-full accent-indigo-600"
-        />
-        <span className="text-xs text-gray-500">Lower is stricter.</span>
-      </label>
+      <div className="mt-6 space-y-5 border-t border-hairline pt-5">
+        <label className="block">
+          <span className="mb-0.5 flex justify-between gap-3 text-sm">
+            <span className="font-semibold text-ink">Reject matches further than</span>
+            <span className="tabular text-ink-muted">{pct(model.maxDistance)}</span>
+          </span>
+          <InkRange
+            value={Math.round(model.maxDistance * 100)}
+            min={5}
+            max={50}
+            onChange={(v) => setModel((m) => ({ ...m, maxDistance: v / 100 }))}
+          />
+          <span className="text-xs text-ink-muted">Lower is stricter.</span>
+        </label>
 
-      <label className="mt-4 block">
-        <span className="mb-1 flex justify-between text-sm">
-          <span className="text-gray-600">Say "unsure" below this confidence</span>
-          <span className="tabular-nums text-gray-500">{pct(model.minConfidence)}</span>
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={50}
-          value={Math.round(model.minConfidence * 100)}
-          onChange={(e) => setModel((m) => ({ ...m, minConfidence: Number(e.target.value) / 100 }))}
-          className="w-full accent-indigo-600"
-        />
-        <span className="text-xs text-gray-500">
-          Higher means fewer wrong letters but more "unsure". Both settings are also used by Translate and Learn.
-        </span>
-      </label>
+        <label className="block">
+          <span className="mb-0.5 flex justify-between gap-3 text-sm">
+            <span className="font-semibold text-ink">Say "unsure" below this confidence</span>
+            <span className="tabular text-ink-muted">{pct(model.minConfidence)}</span>
+          </span>
+          <InkRange
+            value={Math.round(model.minConfidence * 100)}
+            min={0}
+            max={50}
+            onChange={(v) => setModel((m) => ({ ...m, minConfidence: v / 100 }))}
+          />
+          <span className="text-xs text-ink-muted">
+            Higher means fewer wrong letters but more "unsure". Both settings are also used by Translate and Learn.
+          </span>
+        </label>
+      </div>
     </Card>
   );
 }
@@ -337,32 +413,12 @@ function TrainingData({ model, bends }: { model: SignModel; bends: number[] }) {
     URL.revokeObjectURL(a.href);
   }
 
+  const tool = "max-sm:h-11";
+
   return (
     <Card
       title="Training data"
       description={`${model.samples.length} samples. The recognizer is only as good as these: record more reps per letter to make it sturdier.`}
-      action={
-        <div className="flex flex-wrap justify-end gap-1">
-          <Button variant="ghost" size="sm" onClick={importTeam}>
-            <Users className="h-3.5 w-3.5" /> Add from team
-          </Button>
-          <Button variant="ghost" size="sm" onClick={importCollect}>
-            <Database className="h-3.5 w-3.5" /> Add from Collect
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => pickFile("add")}>
-            <Upload className="h-3.5 w-3.5" /> Add CSV
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => pickFile("replace")}>
-            <Upload className="h-3.5 w-3.5" /> Replace with CSV
-          </Button>
-          <Button variant="ghost" size="sm" onClick={exportCsv}>
-            <Download className="h-3.5 w-3.5" /> Export
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => { resetModel(); setMsg({ ok: true, text: "Back to the bundled samples." }); }}>
-            <RotateCcw className="h-3.5 w-3.5" /> Reset
-          </Button>
-        </div>
-      }
     >
       <input
         ref={fileRef}
@@ -376,40 +432,71 @@ function TrainingData({ model, bends }: { model: SignModel; bends: number[] }) {
         }}
       />
 
-      <form
-        className="flex flex-wrap items-end gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          addSample();
-        }}
-      >
-        <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Save the current hand as</span>
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. E, or Rest"
-            maxLength={12}
-            className="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-          />
-        </label>
-        <Button type="submit" disabled={!label.trim()}>
-          <Plus className="h-4 w-4" /> Add sample
-        </Button>
-      </form>
-      {msg && <p className={`mt-2 text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`}>{msg.text}</p>}
+      <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addSample();
+          }}
+        >
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold text-ink">Save the current hand as</span>
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g. E, or Rest"
+              maxLength={12}
+              className={`h-11 w-40 rounded-[var(--radius-control)] border ${CONTROL_BORDER} bg-surface px-3 text-base text-ink placeholder:text-ink-muted transition-colors duration-150 hover:border-ink focus:border-ink sm:text-sm`}
+            />
+          </label>
+          <Button type="submit" disabled={!label.trim()}>
+            <Plus className="h-4 w-4" aria-hidden /> Add sample
+          </Button>
+        </form>
 
-      <ul className="mt-4 flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 md:justify-end">
+          <Button variant="secondary" size="sm" className={tool} onClick={importTeam}>
+            <Users className="h-3.5 w-3.5" aria-hidden /> Add from team
+          </Button>
+          <Button variant="secondary" size="sm" className={tool} onClick={importCollect}>
+            <Database className="h-3.5 w-3.5" aria-hidden /> Add from Collect
+          </Button>
+          <Button variant="secondary" size="sm" className={tool} onClick={() => pickFile("add")}>
+            <Upload className="h-3.5 w-3.5" aria-hidden /> Add CSV
+          </Button>
+          <Button variant="secondary" size="sm" className={tool} onClick={() => pickFile("replace")}>
+            <Upload className="h-3.5 w-3.5" aria-hidden /> Replace with CSV
+          </Button>
+          <Button variant="secondary" size="sm" className={tool} onClick={exportCsv}>
+            <Download className="h-3.5 w-3.5" aria-hidden /> Export
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={tool}
+            onClick={() => { resetModel(); setMsg({ ok: true, text: "Back to the bundled samples." }); }}
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Reset
+          </Button>
+        </div>
+      </div>
+
+      <p aria-live="polite" className={`mt-3 min-h-[1.25rem] text-sm ${msg?.ok ? "text-ok" : "text-danger"}`}>
+        {msg?.text}
+      </p>
+
+      <ul className="mt-4 flex flex-wrap gap-1.5 border-t border-hairline pt-5">
         {counts.map(([l, n]) => (
-          <li key={l} className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1 text-sm">
-            <span className="font-semibold text-gray-800">{l === REST_LABEL ? "Rest" : l}</span>
-            <span className="text-xs text-gray-500">×{n}</span>
+          <li key={l} className="flex items-center gap-1.5 rounded-[var(--radius-control)] border border-hairline bg-ground pl-3 text-sm">
+            <span className="font-display text-base font-bold text-ink">{l === REST_LABEL ? "Rest" : l}</span>
+            <span className="tabular text-xs text-ink-muted">×{n}</span>
             <button
               onClick={() => removeLabel(l)}
               aria-label={`Remove all samples for ${l}`}
-              className="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+              className="flex h-11 w-9 items-center justify-center rounded-[var(--radius-control)] text-ink-muted transition-colors duration-150 hover:bg-wash hover:text-ink sm:h-9 sm:w-8"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" aria-hidden />
             </button>
           </li>
         ))}
@@ -434,70 +521,79 @@ function RobustnessTest({ model }: { model: SignModel }) {
   return (
     <Card
       title="Robustness test"
-      description="Wiggles every sample's fingers at random and checks it's still recognized. Letters that fail sit too close to a neighbour."
+      description="Wiggles every sample's fingers at random and checks it's still recognized. Letters that fail sit too close to a neighbour. A simulation, not real-world accuracy."
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-gray-600">
-          Wiggle up to ±{pct(noise)}
-          <input
-            type="range"
-            min={1}
-            max={30}
-            value={Math.round(noise * 100)}
-            onChange={(e) => setNoise(Number(e.target.value) / 100)}
-            className="w-32 accent-indigo-600"
-          />
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <label className="block w-full max-w-56 text-sm">
+          <span className="mb-0.5 flex justify-between gap-3">
+            <span className="font-semibold text-ink">Wiggle up to</span>
+            <span className="tabular text-ink-muted">±{pct(noise)}</span>
+          </span>
+          <InkRange value={Math.round(noise * 100)} min={1} max={30} onChange={(v) => setNoise(v / 100)} />
         </label>
         <Button onClick={() => setResults(noiseTest(model, noise))} disabled={!model.samples.length}>
           Run test
         </Button>
-        {results && (
-          <span className="text-sm text-gray-600">
-            <span className="font-medium text-gray-900">{share(correct)} right</span> · {share(held)} unsure or no
-            letter · <span className="font-medium text-red-700">{share(total - correct - held)} wrong letter</span>
-          </span>
-        )}
       </div>
 
       {results && (
-        <table className="mt-4 w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-gray-500">
-              <th className="py-1 font-normal">Letter</th>
-              <th className="py-1 font-normal">Recognized</th>
-              <th className="py-1 font-normal">Mistaken for</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map((r) => {
-              const rate = r.correct / r.trials;
-              const mistakes = Object.entries(r.confusedWith)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3)
-                .map(([l, n]) => `${l === "far" ? "no letter" : l === REST_LABEL ? "Rest" : l} ${Math.round((n / r.trials) * 100)}%`);
-              return (
-                <tr key={r.label} className="border-t border-gray-100">
-                  <td className="py-1.5 font-semibold text-gray-800">{r.label === REST_LABEL ? "Rest" : r.label}</td>
-                  <td className="py-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-24 rounded-full bg-gray-100">
-                        <div
-                          className={`h-full rounded-full ${rate >= 0.9 ? "bg-green-500" : rate >= 0.6 ? "bg-amber-400" : "bg-red-400"}`}
-                          style={{ width: `${rate * 100}%` }}
-                        />
-                      </div>
-                      <span className="tabular-nums text-gray-600">{Math.round(rate * 100)}%</span>
-                    </div>
-                  </td>
-                  <td className="py-1.5 text-gray-600">{mistakes.join(", ") || "–"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <dl className="mt-6 grid grid-cols-3 gap-2 sm:max-w-lg">
+          <div className="rounded-[var(--radius-control)] bg-ok-wash px-3 py-2.5">
+            <dt className="text-xs text-ok">Right</dt>
+            <dd className="tabular font-display text-heading text-ink">{share(correct)}</dd>
+          </div>
+          <div className="rounded-[var(--radius-control)] bg-warn-wash px-3 py-2.5">
+            <dt className="text-xs text-warn">Unsure or no letter</dt>
+            <dd className="tabular font-display text-heading text-ink">{share(held)}</dd>
+          </div>
+          <div className="rounded-[var(--radius-control)] bg-danger-wash px-3 py-2.5">
+            <dt className="text-xs text-danger">Wrong letter</dt>
+            <dd className="tabular font-display text-heading text-danger">{share(total - correct - held)}</dd>
+          </div>
+        </dl>
       )}
 
-      <p className="mt-4 text-sm text-gray-500">
+      {results && (
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-ink-muted">
+                <th className="py-1.5 pr-3 font-semibold">Letter</th>
+                <th className="py-1.5 pr-3 font-semibold">Recognized</th>
+                <th className="py-1.5 font-semibold">Mistaken for</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((r) => {
+                const rate = r.correct / r.trials;
+                const mistakes = Object.entries(r.confusedWith)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 3)
+                  .map(([l, n]) => `${l === "far" ? "no letter" : l === REST_LABEL ? "Rest" : l} ${Math.round((n / r.trials) * 100)}%`);
+                return (
+                  <tr key={r.label} className="border-t border-hairline">
+                    <td className="py-2 pr-3 font-display text-base font-bold text-ink">{r.label === REST_LABEL ? "Rest" : r.label}</td>
+                    <td className="py-2 pr-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-16 shrink-0 overflow-hidden rounded-full bg-wash sm:w-24">
+                          <div
+                            className={`h-full origin-left rounded-full ${rate >= 0.9 ? "bg-ok" : rate >= 0.6 ? "bg-warn" : "bg-danger"}`}
+                            style={{ transform: `scaleX(${rate})` }}
+                          />
+                        </div>
+                        <span className="tabular text-ink">{Math.round(rate * 100)}%</span>
+                      </div>
+                    </td>
+                    <td className="tabular py-2 text-ink-muted">{mistakes.join(", ") || "–"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="tabular mt-5 text-sm text-ink-muted">
         {loo
           ? `Leave-one-out on real recordings: ${loo.correct} of ${loo.tested} samples recognized (${Math.round((loo.correct / loo.tested) * 100)}%). Each sample is classified using all the others.`
           : "Record at least two samples of a letter to also get a leave-one-out score on real recordings."}

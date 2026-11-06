@@ -10,12 +10,12 @@ export default function Collect() {
   const recordings = useMemo(() => recordingsFromCollectData(data), [data]);
 
   return (
-    <Page>
+    <Page width="max-w-6xl">
       <PageHeader
         title="Collect data"
-        description='Record labeled glove samples (static letters, moving signs, and a "none" class) and export them as CSV.'
+        description='Record labelled glove samples: static letters, moving signs and a "none" class. Download them as CSV, or let them upload to the team dataset.'
       />
-      <div className="space-y-6">
+      <div className="space-y-8">
         <DataCollector onDataChange={setData} />
         <MotionLab recordings={recordings} />
       </div>

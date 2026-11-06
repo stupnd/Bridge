@@ -98,85 +98,85 @@ export default function TeachHand() {
       <GloveGate what="record your handshapes">
         {phase === "setup" && (
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
               Rounds
               <select
                 value={reps}
                 onChange={(e) => setReps(Number(e.target.value))}
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                className="tabular h-11 rounded-[var(--radius-control)] border border-[#cfcac1] bg-surface px-3 text-base font-normal text-ink transition-colors duration-150 hover:border-ink sm:h-10 sm:text-sm"
               >
                 {[1, 2, 3].map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={withRest} onChange={(e) => setWithRest(e.target.checked)} className="accent-indigo-600" />
+            <label className="flex min-h-11 items-center gap-2.5 text-sm text-ink">
+              <input type="checkbox" checked={withRest} onChange={(e) => setWithRest(e.target.checked)} className="h-[18px] w-[18px] accent-[var(--ink)]" />
               Include a relaxed "Rest" hand
             </label>
             <Button onClick={run}>Start</Button>
-            <span className="text-xs text-gray-500">
+            <span className="tabular text-sm text-ink-muted">
               About {Math.ceil(((STATIC_LETTERS.length + (withRest ? 1 : 0)) * reps * (READY_S + HOLD_MS / 1000)) / 60)} min
             </span>
-            {msg && <p className="w-full text-sm text-green-700">{msg}</p>}
+            {msg && <p className="w-full text-sm text-ok" aria-live="polite">{msg}</p>}
           </div>
         )}
 
         {phase === "running" && step && (
-          <div className="grid items-center gap-6 md:grid-cols-[1fr_auto_auto]">
+          <div className="grid items-center gap-6 md:grid-cols-[1fr_auto_auto] md:gap-8">
             <div aria-live="polite">
-              <p className="text-sm text-gray-500 tabular-nums">
+              <p className="tabular text-sm text-ink-muted">
                 {index + 1} of {steps.length} · round {step.rep}
               </p>
-              <p className="mt-1 text-6xl font-semibold text-indigo-600">{step.label === REST_LABEL ? "Rest" : step.label}</p>
-              <p className="mt-2 text-gray-800">{letter?.shape ?? "Let your hand relax naturally, the way it sits between letters."}</p>
-              <p className="mt-3 text-sm font-medium tabular-nums">
-                {countdown > 0 ? <span className="text-gray-600">Get ready… {countdown}</span> : <span className="text-green-700">Hold still</span>}
+              <p className="mt-1 font-display text-[4.5rem] font-extrabold leading-none text-ink">{step.label === REST_LABEL ? "Rest" : step.label}</p>
+              <p className="mt-3 max-w-md text-lead text-ink">{letter?.shape ?? "Let your hand relax naturally, the way it sits between letters."}</p>
+              <p className="tabular mt-4 text-sm font-semibold">
+                {countdown > 0 ? <span className="text-ink-muted">Get ready… {countdown}</span> : <span className="text-ok">Hold still</span>}
               </p>
-              <div className="mt-2 h-2 w-48 overflow-hidden rounded-full bg-gray-100" aria-hidden>
-                <div className="h-full bg-green-500" style={{ width: `${progress * 100}%` }} />
+              <div className="mt-2 h-2 w-48 max-w-full overflow-hidden rounded-full bg-wash" aria-hidden>
+                <div className="h-full origin-left rounded-full bg-ok" style={{ transform: `scaleX(${progress})` }} />
               </div>
               <div className="mt-4 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => (skip.current = true)}>Skip</Button>
-                <Button variant="ghost" size="sm" onClick={() => (stop.current = true)}>Stop</Button>
+                <Button variant="secondary" size="sm" className="max-sm:h-11" onClick={() => (skip.current = true)}>Skip</Button>
+                <Button variant="ghost" size="sm" className="max-sm:h-11" onClick={() => (stop.current = true)}>Stop</Button>
               </div>
             </div>
             {letter && (
-              <figure className="text-center">
-                <HandDiagram bends={targetBends(letter.fingers)} muted={letter.fingers.map((f) => f === null)} className="w-24" label={`Target for ${letter.letter}`} />
-                <figcaption className="text-xs text-gray-500">Target</figcaption>
+              <figure className="rounded-[var(--radius-card)] bg-ground p-3 text-center">
+                <HandDiagram bends={targetBends(letter.fingers)} muted={letter.fingers.map((f) => f === null)} className="mx-auto w-24 sm:w-28" label={`Target for ${letter.letter}`} />
+                <figcaption className="mt-1 text-sm text-ink-muted">Target</figcaption>
               </figure>
             )}
-            <figure className="text-center">
-              <HandDiagram bends={bends} className="w-24" label="Your hand" />
-              <figcaption className="text-xs text-gray-500">You</figcaption>
+            <figure className="rounded-[var(--radius-card)] bg-ground p-3 text-center">
+              <HandDiagram bends={bends} className="mx-auto w-24 sm:w-28" label="Your hand" />
+              <figcaption className="mt-1 text-sm text-ink-muted">You</figcaption>
             </figure>
           </div>
         )}
 
         {phase === "review" && (
           <div>
-            <p className="text-gray-900">
+            <p className="tabular text-ink">
               Recorded {captured.length} sample{captured.length === 1 ? "" : "s"}.
               {ownCheck && ` Checked against each other, ${ownCheck.correct} of ${ownCheck.tested} are recognized (${Math.round((ownCheck.correct / ownCheck.tested) * 100)}%).`}
             </p>
-            {msg && <p className="mt-1 text-sm text-amber-700">{msg}</p>}
+            {msg && <p className="mt-1 text-sm text-warn" aria-live="polite">{msg}</p>}
             <ul className="mt-3 flex flex-wrap gap-1.5">
               {captured.map((s, i) => (
-                <li key={i} className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1 text-sm">
-                  <span className="font-semibold text-gray-800">{s.label === REST_LABEL ? "Rest" : s.label}</span>
+                <li key={i} className="flex items-center gap-1 rounded-[var(--radius-control)] border border-hairline bg-ground pl-3 text-sm">
+                  <span className="font-display text-base font-bold text-ink">{s.label === REST_LABEL ? "Rest" : s.label}</span>
                   <button
                     onClick={() => setCaptured((c) => c.filter((_, k) => k !== i))}
                     aria-label={`Remove this ${s.label} sample`}
-                    className="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+                    className="flex h-11 w-9 items-center justify-center rounded-[var(--radius-control)] text-ink-muted transition-colors duration-150 hover:bg-wash hover:text-ink sm:h-9 sm:w-8"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs text-gray-500">Remove any you flubbed, then choose how to use them.</p>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <p className="mt-3 text-sm text-ink-muted">Remove any you flubbed, then choose how to use them.</p>
+            <div className="mt-5 flex flex-wrap gap-2">
               <Button onClick={() => finish("replace")} disabled={!captured.length}>Use only my samples</Button>
               <Button variant="secondary" onClick={() => finish("add")} disabled={!captured.length}>Add to current samples</Button>
               <Button variant="ghost" onClick={() => { setCaptured([]); setMsg(""); setPhase("setup"); }}>Discard</Button>

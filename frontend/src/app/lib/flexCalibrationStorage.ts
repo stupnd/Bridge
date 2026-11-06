@@ -53,6 +53,14 @@ export function clearFlexCalibrationStorage() {
   localStorage.removeItem(FLEX_CALIB_STORAGE_KEY);
 }
 
+/**
+ * Best-guess 0–1 bend before any calibration. The glove's flex sensors read
+ * lower as a finger bends (straight ≈ 1800, fist ≈ 900), so lower raw = more bent.
+ */
+export function rawToBendUncalibrated(raw: number): number {
+  return Math.max(0, Math.min(1, 1 - raw / 4095));
+}
+
 /** Map raw ADC to 0–1 bend: straight → 0, bent → 1 (either polarity). */
 export function rawToBendNormalized(
   raw: number,
@@ -61,7 +69,7 @@ export function rawToBendNormalized(
 ): number {
   const span = bent - straight;
   if (Math.abs(span) < 1) {
-    return Math.max(0, Math.min(1, raw / 4095));
+    return rawToBendUncalibrated(raw);
   }
   return Math.max(0, Math.min(1, (raw - straight) / span));
 }

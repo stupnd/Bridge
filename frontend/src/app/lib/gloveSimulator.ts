@@ -1,7 +1,8 @@
 /** Fake glove packets for testing the Collect page without Bluetooth (dev only). */
 
-const OPEN_RAW = [1400, 1300, 1250, 1300, 1350];
-const CLOSED_RAW = [2600, 3100, 3200, 3050, 2900];
+// Like the real glove: a bent finger reads lower than a straight one.
+export const OPEN_RAW = [1850, 1800, 1700, 1850, 1800];
+export const CLOSED_RAW = [950, 800, 550, 600, 650];
 
 function noise(amp: number): number {
   return (Math.random() * 2 - 1) * amp;

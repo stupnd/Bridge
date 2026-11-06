@@ -2,11 +2,15 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router";
 import { supabase } from "../../supabaseClient";
 
+/** Screenshot builds only (`vite build --mode capture`): never set in a production build. */
+const CAPTURE = import.meta.env.VITE_CAPTURE === "1";
+
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!CAPTURE);
   const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
+    if (CAPTURE) return;
     supabase.auth.getSession().then(({ data }) => {
       setAuthed(!!data.session);
       setLoading(false);
@@ -14,6 +18,6 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }, []);
 
   if (loading) return null;
-  if (!authed) return <Navigate to="/" replace />;
+  if (!authed && !CAPTURE) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }

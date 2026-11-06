@@ -1,4 +1,4 @@
-/** Small shared building blocks so every page uses the same buttons, cards and headings. */
+/** Shared building blocks so every page uses the same buttons, cards and headings. */
 import { ButtonHTMLAttributes, ReactNode } from "react";
 import { Link } from "react-router";
 import { Bluetooth, SlidersHorizontal } from "lucide-react";
@@ -6,18 +6,18 @@ import { useSensor } from "../context/SensorContext";
 
 export function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-3xl font-semibold text-gray-900">{title}</h1>
-        {description && <p className="mt-1 text-gray-600">{description}</p>}
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="max-w-2xl">
+        <h1 className="font-display text-title text-ink">{title}</h1>
+        {description && <p className="mt-2 text-lead text-ink-muted">{description}</p>}
       </div>
       {action}
     </div>
   );
 }
 
-export function Page({ children, width = "max-w-4xl" }: { children: ReactNode; width?: string }) {
-  return <div className={`${width} mx-auto p-6 pb-28 md:pb-10`}>{children}</div>;
+export function Page({ children, width = "max-w-5xl" }: { children: ReactNode; width?: string }) {
+  return <div className={`${width} mx-auto px-4 pt-8 pb-28 sm:px-6 md:pt-12 md:pb-16`}>{children}</div>;
 }
 
 export function Card({ title, description, action, children, className = "" }: {
@@ -28,12 +28,12 @@ export function Card({ title, description, action, children, className = "" }: {
   className?: string;
 }) {
   return (
-    <section className={`bg-white rounded-2xl border border-gray-200 shadow-sm p-6 ${className}`}>
+    <section className={`rounded-[var(--radius-card)] border border-hairline bg-surface p-5 sm:p-6 ${className}`}>
       {(title || action) && (
-        <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            {title && <h2 className="text-lg font-semibold text-gray-900">{title}</h2>}
-            {description && <p className="mt-0.5 text-sm text-gray-500">{description}</p>}
+            {title && <h2 className="font-display text-heading text-ink">{title}</h2>}
+            {description && <p className="mt-1 text-sm text-ink-muted">{description}</p>}
           </div>
           {action}
         </div>
@@ -45,29 +45,28 @@ export function Card({ title, description, action, children, className = "" }: {
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-indigo-600 text-white hover:bg-indigo-700",
-  secondary: "bg-white border border-gray-300 text-gray-800 hover:bg-gray-50",
-  ghost: "text-gray-600 hover:bg-gray-100",
-  danger: "bg-white border border-red-200 text-red-600 hover:bg-red-50",
+  primary: "bg-ink text-white hover:bg-[#33313d] active:bg-ink",
+  secondary: "bg-surface text-ink border border-[#cfcac1] hover:border-ink",
+  ghost: "text-ink-muted hover:text-ink hover:bg-wash",
+  danger: "bg-surface text-danger border border-[#f1c4bf] hover:bg-danger-wash",
 };
+const SIZES = { sm: "h-11 px-3 text-sm md:h-9", md: "h-11 px-4 text-[0.95rem]", lg: "h-12 px-6 text-base" };
+
+export function buttonClass(variant: Variant = "primary", size: keyof typeof SIZES = "md", className = "") {
+  return `inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] font-semibold transition-[background-color,border-color,color,transform] duration-150 ease-out active:translate-y-px disabled:pointer-events-none disabled:opacity-45 ${VARIANTS[variant]} ${SIZES[size]} ${className}`;
+}
 
 export function Button({ variant = "primary", size = "md", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
-  size?: "sm" | "md" | "lg";
+  size?: keyof typeof SIZES;
 }) {
-  const sizes = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-6 py-3 text-base" };
-  return (
-    <button
-      type="button"
-      {...props}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ${VARIANTS[variant]} ${sizes[size]} ${className}`}
-    />
-  );
+  return <button type="button" {...props} className={buttonClass(variant, size, className)} />;
 }
 
+/** Reports a real state only (connected, calibrated, motion sensor). */
 export function StatusDot({ tone }: { tone: "ok" | "warn" | "off" }) {
-  const color = { ok: "bg-green-500", warn: "bg-amber-400", off: "bg-gray-300" }[tone];
-  return <span className={`inline-block w-2 h-2 rounded-full ${color}`} aria-hidden />;
+  const color = { ok: "bg-ok", warn: "bg-caution", off: "bg-ink-faint" }[tone];
+  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} aria-hidden />;
 }
 
 /**
@@ -84,9 +83,9 @@ export function GloveGate({ children, needsCalibration = true, what }: {
   if (!connected) {
     return (
       <EmptyState
-        icon={<Bluetooth className="w-6 h-6 text-indigo-600" />}
+        icon={<Bluetooth className="h-5 w-5" />}
         title="Connect your glove"
-        body={`Connect the glove over Bluetooth to ${what}.`}
+        body={`Connect the glove over Bluetooth to ${what}. Works in Chrome or Edge on a computer.`}
         action={<Button onClick={connect}>Connect glove</Button>}
       />
     );
@@ -94,14 +93,10 @@ export function GloveGate({ children, needsCalibration = true, what }: {
   if (needsCalibration && !calibration) {
     return (
       <EmptyState
-        icon={<SlidersHorizontal className="w-6 h-6 text-indigo-600" />}
+        icon={<SlidersHorizontal className="h-5 w-5" />}
         title="Calibrate first"
-        body="Calibration teaches the app what your open hand and fist look like. It takes about 10 seconds."
-        action={
-          <Link to="/app/glove" className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-            Go to calibration
-          </Link>
-        }
+        body="Calibration records your open hand and your fist, so every bend reads 0 to 100% for you. It takes about 10 seconds."
+        action={<Link to="/app/glove" className={buttonClass()}>Go to calibration</Link>}
       />
     );
   }
@@ -110,11 +105,11 @@ export function GloveGate({ children, needsCalibration = true, what }: {
 
 export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; title: string; body: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center text-center py-10 px-4">
-      {icon && <div className="mb-3 w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center">{icon}</div>}
-      <p className="font-medium text-gray-900">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-gray-500">{body}</p>
-      {action && <div className="mt-4">{action}</div>}
+    <div className="flex flex-col items-center px-4 py-10 text-center">
+      {icon && <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-wash text-ink">{icon}</div>}
+      <p className="font-display text-heading text-ink">{title}</p>
+      <p className="mt-1 max-w-sm text-sm text-ink-muted">{body}</p>
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }

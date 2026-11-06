@@ -8,11 +8,12 @@ export default function GloveStatus() {
   const { connected, connect, status, imuLive, calibration } = useSensor();
 
   if (!connected) {
-    const busy = status === "Scanning..." || status === "Connecting...";
+    const reconnecting = status === "Reconnecting...";
+    const busy = reconnecting || status === "Scanning..." || status === "Connecting...";
     return (
       <Button size="sm" onClick={connect} disabled={busy}>
-        <Bluetooth className="w-4 h-4" />
-        {busy ? "Connecting…" : "Connect glove"}
+        <Bluetooth className="h-4 w-4" aria-hidden />
+        {reconnecting ? "Reconnecting…" : busy ? "Connecting…" : "Connect glove"}
       </Button>
     );
   }
@@ -22,12 +23,12 @@ export default function GloveStatus() {
   return (
     <Link
       to="/app/glove"
-      className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+      className="flex h-9 items-center gap-2 rounded-[var(--radius-control)] border border-hairline bg-surface px-3 text-xs transition-colors duration-150 hover:border-ink"
       title="Glove settings"
     >
       <StatusDot tone={tone} />
-      <span className="font-medium">Glove</span>
-      <span className="text-gray-500">{detail}</span>
+      <span className="font-semibold text-ink">Glove</span>
+      <span className="text-ink-muted">{detail}</span>
     </Link>
   );
 }

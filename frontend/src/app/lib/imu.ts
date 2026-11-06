@@ -6,7 +6,7 @@
  * Axis names (X/Y/Z) are the sensor's own axes. What "palm down" means in
  * those axes depends on how the sensor is mounted on the glove.
  */
-import { rawToBendNormalized } from "./flexCalibrationStorage";
+import { rawToBendNormalized, rawToBendUncalibrated } from "./flexCalibrationStorage";
 
 export type Vec3 = [number, number, number];
 
@@ -85,7 +85,7 @@ export function computeFeatures(frames: Frame[], calib: FlexCalibration | null):
       frames.map((f) =>
         calib
           ? rawToBendNormalized(f.fingers[i], calib.open[i], calib.closed[i])
-          : f.fingers[i] / 4095
+          : rawToBendUncalibrated(f.fingers[i])
       )
     )
   );

@@ -1,25 +1,18 @@
 /**
- * A front-view hand silhouette whose fingers fold by bend amount
- * (0 straight → 1 bent). Straight fingers stand up; bent fingers shorten and
- * fold down over the palm, the way a fist looks from the front.
+ * A front-view hand whose fingers fold by bend amount (0 straight → 1 bent),
+ * each finger drawn in its own ink (lib/fingers). Straight fingers stand up in a
+ * light tint; bending deepens the ink and folds the finger over the palm.
  * Used for the live glove view and for showing a letter's target handshape.
+ * Drawn as a left hand (thumb on the right) to match the glove.
  */
+import { FINGERS, fingerTint } from "../lib/fingers";
+import { LONG, PALM, THUMB, WRIST, longFinger, thumb } from "../lib/handGeometry";
 
-// viewBox 0 0 200 220. Palm spans x 48–152, y 104–196.
-const PALM = { x: 48, y: 104, w: 104, h: 92, r: 26 };
-// Index → pinky: center x, full length, width.
-const FINGERS = [
-  { x: 63, len: 72, w: 22 },
-  { x: 88, len: 82, w: 23 },
-  { x: 113, len: 76, w: 22 },
-  { x: 137, len: 58, w: 19 },
-];
-const FINGER_BASE_Y = PALM.y + 14;
-const THUMB = { x: 58, y: 172, len: 58, w: 24 };
+export const PALM_FILL = "#ece8e1";
 
-const SKIN = "#c7d2fe"; // indigo-200
-const FOLD = "#818cf8"; // indigo-400: the parts folded over the palm
-const WRONG = "#fbbf24"; // amber-400: a finger that doesn't match in practice
+/** The tint of a finger's upright part: lighter when straight, deeper as it bends. */
+export const uprightFill = (i: number, bend: number) =>
+  fingerTint(FINGERS[i].color, Math.round(28 + 52 * Math.max(0, Math.min(1, bend))));
 
 export default function HandDiagram({
   bends,
@@ -29,7 +22,7 @@ export default function HandDiagram({
   label,
 }: {
   bends: number[];
-  /** Per finger: true draws it in the "wrong" color (used for practice feedback). */
+  /** Per finger: true outlines it in ink with a dashed line (practice: "this one is off"). */
   highlight?: boolean[];
   /** Per finger: drawn faded (the glove doesn't check that finger). */
   muted?: boolean[];
@@ -37,14 +30,11 @@ export default function HandDiagram({
   /** Accessible description; omit for decorative copies. */
   label?: string;
 }) {
-  const bend = (i: number) => Math.max(0, Math.min(1, bends[i] ?? 0));
-  const opacity = (i: number) => (muted?.[i] ? 0.35 : 1);
-
-  const thumbBend = bend(0);
-  // Out to the side when straight (-40° from vertical), across the palm when bent (+75°).
-  const thumbAngle = -40 + thumbBend * 115;
-  const thumbLen = THUMB.len * (1 - 0.25 * thumbBend);
-  const thumbColor = highlight?.[0] ? WRONG : thumbBend > 0.5 ? FOLD : SKIN;
+  const opacity = (i: number) => (muted?.[i] ? 0.3 : 1);
+  const outline = (i: number) =>
+    highlight?.[i] ? { stroke: "var(--ink)", strokeWidth: 2.5, strokeDasharray: "4 3" } : {};
+  const t = thumb(bends[0] ?? 0);
+  const thumbBent = (bends[0] ?? 0) > 0.5;
 
   return (
     <svg
@@ -52,47 +42,32 @@ export default function HandDiagram({
       className={className}
       {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
     >
-      {/* Wrist and palm */}
-      <rect x={70} y={180} width={60} height={40} rx={10} fill={SKIN} />
-      <rect x={PALM.x} y={PALM.y} width={PALM.w} height={PALM.h} rx={PALM.r} fill={SKIN} />
+      {/* handGeometry draws a right hand; flip it across the 200-wide viewBox. */}
+      <g transform="matrix(-1 0 0 1 200 0)">
+        <rect x={WRIST.x} y={WRIST.y} width={WRIST.w} height={WRIST.h} rx={WRIST.r} fill={PALM_FILL} />
+        <rect x={PALM.x} y={PALM.y} width={PALM.w} height={PALM.h} rx={PALM.r} fill={PALM_FILL} />
 
-      {/* Fingers: upright part above the palm, folded part (when bent) over it */}
-      {FINGERS.map((f, k) => {
-        const i = k + 1;
-        const b = bend(i);
-        const upright = f.len * (1 - b) + f.w / 2;
-        const folded = f.len * 0.42 * b;
-        const color = highlight?.[i] ? WRONG : SKIN;
-        const foldColor = highlight?.[i] ? WRONG : FOLD;
-        return (
-          <g key={i} opacity={opacity(i)}>
-            <rect x={f.x - f.w / 2} y={FINGER_BASE_Y - upright} width={f.w} height={upright + 6} rx={f.w / 2} fill={color} />
-            {folded > 2 && (
-              <rect
-                x={f.x - f.w / 2}
-                y={FINGER_BASE_Y - f.w / 2}
-                width={f.w}
-                height={folded + f.w / 2}
-                rx={f.w / 2}
-                fill={foldColor}
-              />
-            )}
-          </g>
-        );
-      })}
+        {LONG.map((_, k) => {
+          const i = k + 1;
+          const g = longFinger(k, bends[i] ?? 0);
+          return (
+            <g key={i} opacity={opacity(i)}>
+              <rect {...g.up} fill={uprightFill(i, bends[i] ?? 0)} {...outline(i)} />
+              {g.folded && <rect {...g.folded} fill={FINGERS[i].color} {...outline(i)} />}
+            </g>
+          );
+        })}
 
-      {/* Thumb, drawn last so it sits over folded fingers like a real fist */}
-      <g opacity={opacity(0)} transform={`rotate(${thumbAngle} ${THUMB.x} ${THUMB.y})`}>
-        <rect
-          x={THUMB.x - THUMB.w / 2}
-          y={THUMB.y - thumbLen}
-          width={THUMB.w}
-          height={thumbLen + THUMB.w / 2}
-          rx={THUMB.w / 2}
-          fill={thumbColor}
-          stroke="#eef2ff"
-          strokeWidth={thumbBend > 0.5 ? 3 : 0}
-        />
+        {/* Thumb, drawn last so it sits over folded fingers like a real fist */}
+        <g opacity={opacity(0)} transform={`rotate(${t.angle} ${THUMB.x} ${THUMB.y})`}>
+          <rect
+            {...t.rect}
+            fill={thumbBent ? FINGERS[0].color : uprightFill(0, bends[0] ?? 0)}
+            stroke={highlight?.[0] ? "var(--ink)" : "var(--surface)"}
+            strokeWidth={highlight?.[0] ? 2.5 : thumbBent ? 3 : 0}
+            strokeDasharray={highlight?.[0] ? "4 3" : undefined}
+          />
+        </g>
       </g>
     </svg>
   );

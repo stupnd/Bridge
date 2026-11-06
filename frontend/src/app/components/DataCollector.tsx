@@ -1,5 +1,11 @@
-import { useState, useRef, useEffect } from "react";
-import { rawToBendNormalized } from "../lib/flexCalibrationStorage";
+import { useState, useRef, useEffect, type ReactNode } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
+import { AlertTriangle, Bluetooth, Check, Download, Info, RotateCcw, Trash2, Undo2 } from "lucide-react";
+import { Button, Card, StatusDot } from "./common";
+import HandDiagram from "./HandDiagram";
+import { FINGERS, fingerTint } from "../lib/fingers";
+import { rawToBendNormalized, rawToBendUncalibrated } from "../lib/flexCalibrationStorage";
 import { useSensor } from "../context/SensorContext";
 import { averageFingers, captureFrames } from "../lib/captureFrames";
 import {
@@ -19,7 +25,8 @@ import {
 import { loadCollectData, saveCollectData } from "../lib/collectStorage";
 import { deleteUploadedSample, isTeamMember, uploadPending } from "../lib/teamRecordings";
 
-const FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"] as const;
+gsap.registerPlugin(useGSAP);
+
 const PARTICIPANT_KEY = "bridge-collect-participant-id";
 const HAND_KEY = "bridge-collect-hand";
 const NOTES_MAX = 140;
@@ -63,33 +70,106 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+const prefersReduced = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 function Segmented<T extends string>({
   options,
   value,
   onChange,
   disabled,
+  label,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
   disabled?: boolean;
+  label: string;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
+    <div
+      role="group"
+      aria-label={label}
+      className="flex shrink-0 gap-1 rounded-[var(--radius-control)] bg-wash p-1 sm:inline-flex"
+    >
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           disabled={disabled}
-          className={`px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-            value === o.value ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+          aria-pressed={value === o.value}
+          className={`h-9 min-w-[4.5rem] flex-1 rounded-[7px] px-3 text-sm font-semibold transition-[background-color,color,box-shadow] duration-150 ease-out disabled:opacity-45 max-md:h-10 ${
+            value === o.value
+              ? "bg-surface text-ink shadow-[0_0_0_1px_var(--hairline)]"
+              : "text-ink-muted hover:text-ink"
           }`}
         >
           {o.label}
         </button>
       ))}
     </div>
+  );
+}
+
+const fieldClass =
+  "h-11 w-full min-w-0 rounded-[var(--radius-control)] border border-[#cfcac1] bg-surface px-3 text-[0.95rem] text-ink placeholder:text-ink-faint transition-colors duration-150 hover:border-ink-muted disabled:bg-wash disabled:text-ink-muted";
+
+/** A big countdown digit that drops in on every tick. */
+function Tick({ n, label }: { n: number; label: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useGSAP(
+    () => {
+      if (prefersReduced() || !ref.current) return;
+      gsap.fromTo(ref.current, { opacity: 0, scale: 0.86 }, { opacity: 1, scale: 1, duration: 0.24, ease: "power2.out" });
+    },
+    { scope: ref, dependencies: [n] }
+  );
+  return (
+    <p ref={ref} className="tabular font-display text-[4rem] font-extrabold leading-none text-ink" role="status" aria-label={`${label} ${n}`}>
+      {n}
+    </p>
+  );
+}
+
+/** Fills once over the real hold time while the glove is being read. */
+function HoldBar({ ms }: { ms: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      const bar = ref.current?.firstElementChild;
+      if (!bar) return;
+      if (prefersReduced()) {
+        gsap.set(bar, { scaleX: 1 });
+        return;
+      }
+      gsap.fromTo(bar, { scaleX: 0 }, { scaleX: 1, duration: ms / 1000, ease: "none" });
+    },
+    { scope: ref }
+  );
+  return (
+    <div ref={ref} className="mx-auto mt-4 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-hairline" aria-hidden>
+      <div className="h-full origin-left scale-x-0 rounded-full bg-ink" />
+    </div>
+  );
+}
+
+function Notice({ tone, children }: { tone: "ok" | "info" | "danger" | "warn"; children: ReactNode }) {
+  const styles = {
+    ok: "bg-ok-wash text-ok",
+    info: "bg-wash text-ink",
+    danger: "bg-danger-wash text-danger",
+    warn: "bg-warn-wash text-warn",
+  }[tone];
+  const Icon = { ok: Check, info: Info, danger: AlertTriangle, warn: AlertTriangle }[tone];
+  return (
+    <p
+      role={tone === "danger" ? "alert" : "status"}
+      className={`flex items-start gap-2.5 rounded-[var(--radius-control)] px-3.5 py-2.5 text-sm font-semibold ${styles}`}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <span className="min-w-0">{children}</span>
+    </p>
   );
 }
 
@@ -182,7 +262,7 @@ export default function DataCollector({ onDataChange }: { onDataChange?: (data: 
       await saveCollectData(next);
       setSaveError("");
     } catch (err) {
-      setSaveError("Autosave failed — download the CSV to keep your data. (" + errorMessage(err) + ")");
+      setSaveError("Autosave failed. Download the CSV to keep your data. (" + errorMessage(err) + ")");
     }
   }
 
@@ -256,7 +336,7 @@ export default function DataCollector({ onDataChange }: { onDataChange?: (data: 
       closed,
     };
     setActiveSession(session);
-    setSessionMsg(`Session started ✓ (${pid}, ${hand === "L" ? "left" : "right"} hand)`);
+    setSessionMsg(`Session started (${pid}, ${hand === "L" ? "left" : "right"} hand)`);
     await commit({ ...dataRef.current, sessions: [...dataRef.current.sessions, session] });
   }
 
@@ -329,7 +409,7 @@ export default function DataCollector({ onDataChange }: { onDataChange?: (data: 
     const n = dataRef.current.samples.length;
     const ok = window.confirm(
       `Delete all ${n} sample${n === 1 ? "" : "s"} saved in this browser? ` +
-        "This can't be undone — download the CSV first if you need it. " +
+        "This can't be undone, so download the CSV first if you need it. " +
         "Samples already uploaded stay in the team dataset."
     );
     if (!ok) return;
@@ -350,7 +430,7 @@ export default function DataCollector({ onDataChange }: { onDataChange?: (data: 
   }
 
   const bendPercents = fingers.map((raw, i) => {
-    if (!activeSession) return Math.round((raw / 4095) * 100);
+    if (!activeSession) return Math.round(rawToBendUncalibrated(raw) * 100);
     return Math.round(
       rawToBendNormalized(raw, activeSession.open[i], activeSession.closed[i]) * 100
     );
@@ -365,329 +445,393 @@ export default function DataCollector({ onDataChange }: { onDataChange?: (data: 
       ? nextRep(samples, activeSession.session_id, normalizedLabel)
       : 0;
 
+  const handWord = (h: Hand) => (h === "L" ? "left" : "right");
+  const imuGroups = [
+    { name: "Accelerometer", values: imuValues.slice(0, 3).map((v) => v.toFixed(0)), unit: "mg" },
+    { name: "Gyroscope", values: imuValues.slice(3, 6).map((v) => v.toFixed(1)), unit: "dps" },
+    { name: "Magnetometer", values: imuValues.slice(6, 9).map((v) => v.toFixed(1)), unit: "µT" },
+  ];
+  const calibOpen = calibStep === "open" || calibStep === "open_hold";
+  const uploadedCount = samples.filter((s) => s.uploaded).length;
+
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 space-y-4">
-        <p className="text-sm text-gray-700">
-          <span className="font-medium">Status:</span> {status}
-          {activeSession && (
-            <span className="ml-2 text-green-600 text-xs font-medium">● Session active</span>
-          )}
-        </p>
+    <div className="space-y-6">
+      <div className={`grid gap-6 ${connected ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] lg:items-start" : ""}`}>
+        <div className="min-w-0 space-y-6">
+          {/* ── Glove + participant + session start ── */}
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-5">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  <StatusDot tone={connected ? "ok" : "off"} />
+                  <span className="min-w-0">{status}</span>
+                </p>
+                {activeSession && (
+                  <p className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
+                    <StatusDot tone="ok" />
+                    Session active: {activeSession.participant_id}, {handWord(activeSession.hand)} hand
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {import.meta.env.DEV && (
+                  <label className="flex min-h-11 items-center gap-2 text-sm text-ink-muted">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[var(--ink)]"
+                      checked={simulating}
+                      disabled={(connected && !simulating) || recording || calibInProgress}
+                      onChange={(e) => setSimulating(e.target.checked)}
+                    />
+                    Simulate glove (dev)
+                  </label>
+                )}
+                {!connected && (
+                  <Button onClick={connect}>
+                    <Bluetooth className="h-4 w-4" aria-hidden />
+                    Connect via Bluetooth
+                  </Button>
+                )}
+                {connected && (
+                  <Button variant="secondary" onClick={disconnect} disabled={recording || calibInProgress}>
+                    Disconnect
+                  </Button>
+                )}
+              </div>
+            </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {!connected && (
-            <button
-              onClick={connect}
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
-            >
-              Connect via Bluetooth
-            </button>
-          )}
-          {connected && (
-            <button
-              onClick={disconnect}
-              disabled={recording || calibInProgress}
-              className="px-4 py-2 rounded-lg bg-red-100 text-red-600 text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
-            >
-              Disconnect
-            </button>
-          )}
-          {import.meta.env.DEV && (
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={simulating}
-                disabled={(connected && !simulating) || recording || calibInProgress}
-                onChange={(e) => setSimulating(e.target.checked)}
-              />
-              Simulate glove (dev)
-            </label>
+            <div className="pt-5">
+              <h2 className="font-display text-heading text-ink">Session</h2>
+              <p className="mt-1 max-w-prose text-sm text-ink-muted">
+                Starting a session calibrates the glove (open hand, then fist) and resets rep counts. The hand
+                applies to every sample in the session.
+              </p>
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="participant-id">
+                    Participant ID
+                  </label>
+                  <input
+                    id="participant-id"
+                    type="text"
+                    value={participantId}
+                    onChange={(e) => setParticipantId(e.target.value)}
+                    placeholder="e.g. P01"
+                    className={fieldClass}
+                    maxLength={40}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-sm font-semibold text-ink" aria-hidden>
+                    Hand
+                  </p>
+                  <Segmented label="Hand" options={HAND_OPTIONS} value={hand} onChange={setHand} disabled={calibInProgress} />
+                </div>
+                <Button
+                  onClick={startSession}
+                  disabled={!connected || !loaded || calibInProgress || recording || !participantId.trim()}
+                  variant={activeSession ? "secondary" : "primary"}
+                >
+                  {activeSession ? (
+                    <>
+                      <RotateCcw className="h-4 w-4" aria-hidden />
+                      Start new session
+                    </>
+                  ) : (
+                    "Start session"
+                  )}
+                </Button>
+              </div>
+
+              {activeSession && activeSession.hand !== hand && (
+                <p className="mt-3 text-sm font-semibold text-warn">
+                  The current session is the {handWord(activeSession.hand)} hand. Start a new session to switch.
+                </p>
+              )}
+
+              {(sessionMsg || restoreMsg || syncError || saveError) && (
+                <div className="mt-5 space-y-2">
+                  {sessionMsg && <Notice tone={sessionMsg.startsWith("Session started") ? "ok" : "warn"}>{sessionMsg}</Notice>}
+                  {restoreMsg && <Notice tone="info">{restoreMsg}</Notice>}
+                  {syncError && <Notice tone="danger">{syncError}</Notice>}
+                  {saveError && <Notice tone="danger">{saveError}</Notice>}
+                </div>
+              )}
+
+              {connected && calibInProgress && (
+                <div className="mt-5 flex flex-col items-center gap-5 rounded-[var(--radius-card)] bg-wash px-5 py-6 text-center sm:flex-row sm:text-left">
+                  <HandDiagram
+                    bends={calibOpen ? [0, 0, 0, 0, 0] : [1, 1, 1, 1, 1]}
+                    className="w-24 shrink-0"
+                    label={calibOpen ? "An open hand" : "A closed fist"}
+                  />
+                  <div className="min-w-0 flex-1" aria-live="polite">
+                    {calibStep === "open" && (
+                      <>
+                        <p className="font-display text-heading text-ink">Spread your hand open</p>
+                        <p className="mt-1 text-sm text-ink-muted">Reading starts in</p>
+                        <div className="mt-2"><Tick n={calibCountdown} label="Open hand in" /></div>
+                      </>
+                    )}
+                    {calibStep === "open_hold" && (
+                      <>
+                        <p className="font-display text-heading text-ink">Hold still</p>
+                        <p className="mt-1 text-sm text-ink-muted">Reading your open hand.</p>
+                        <HoldBar key="open" ms={CALIB_HOLD_MS} />
+                      </>
+                    )}
+                    {calibStep === "closed" && (
+                      <>
+                        <p className="font-display text-heading text-ink">Make a fist</p>
+                        <p className="mt-1 text-sm text-ink-muted">Reading starts in</p>
+                        <div className="mt-2"><Tick n={calibCountdown} label="Fist in" /></div>
+                      </>
+                    )}
+                    {calibStep === "closed_hold" && (
+                      <>
+                        <p className="font-display text-heading text-ink">Hold still</p>
+                        <p className="mt-1 text-sm text-ink-muted">Reading your fist.</p>
+                        <HoldBar key="closed" ms={CALIB_HOLD_MS} />
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* ── Record ── */}
+          {connected && activeSession && (
+            <Card title="Record a sample" description="Sign during the window after the countdown. Every recording is saved in this browser right away.">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="min-w-0 flex-1">
+                    <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="collect-label">
+                      Label
+                    </label>
+                    <input
+                      id="collect-label"
+                      type="text"
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                      placeholder="e.g. A, HELLO, NONE"
+                      className={`${fieldClass} font-semibold uppercase placeholder:normal-case placeholder:font-normal`}
+                      maxLength={LABEL_MAX}
+                      disabled={recording}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-sm font-semibold text-ink" aria-hidden>
+                      Sign type
+                    </p>
+                    <Segmented
+                      label="Sign type"
+                      options={SIGN_TYPE_OPTIONS}
+                      value={signType}
+                      onChange={selectSignType}
+                      disabled={recording}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <div className="sm:w-36">
+                    <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="collect-window">
+                      Window (ms)
+                    </label>
+                    <input
+                      id="collect-window"
+                      type="number"
+                      value={windowMs || ""}
+                      onChange={(e) => setWindowMs(Number(e.target.value))}
+                      min={MIN_WINDOW_MS}
+                      max={MAX_WINDOW_MS}
+                      step={100}
+                      aria-invalid={!windowValid}
+                      aria-describedby={!windowValid ? "collect-window-error" : undefined}
+                      className={`${fieldClass} tabular ${windowValid ? "" : "border-danger hover:border-danger"}`}
+                      disabled={recording}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="collect-notes">
+                      Notes <span className="font-normal text-ink-muted">(optional)</span>
+                    </label>
+                    <input
+                      id="collect-notes"
+                      type="text"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Anything odd about this take"
+                      className={fieldClass}
+                      maxLength={NOTES_MAX}
+                    />
+                  </div>
+                </div>
+                {!windowValid && (
+                  <p id="collect-window-error" className="text-sm font-semibold text-danger">
+                    The window must be between {MIN_WINDOW_MS} and {MAX_WINDOW_MS} ms.
+                  </p>
+                )}
+
+                <div className="flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center">
+                  <Button
+                    size="lg"
+                    onClick={recordSample}
+                    disabled={recording || calibInProgress || !normalizedLabel || !windowValid}
+                    className="sm:min-w-[11rem]"
+                  >
+                    {recPhase === "countdown"
+                      ? `Starting in ${recCountdown}…`
+                      : recPhase === "capturing"
+                        ? "Recording…"
+                        : "Record"}
+                  </Button>
+                  {normalizedLabel && (
+                    <p className="text-sm text-ink-muted">
+                      Next: <span className="font-display font-bold text-ink">{normalizedLabel}</span>, rep{" "}
+                      <span className="tabular">{nextRepNum}</span>, {signType},{" "}
+                      <span className="tabular">{windowMs} ms</span>
+                    </p>
+                  )}
+                </div>
+
+                {recPhase === "countdown" && (
+                  <div className="rounded-[var(--radius-card)] bg-wash py-5 text-center">
+                    <p className="text-sm text-ink-muted">Get ready to sign {normalizedLabel}</p>
+                    <div className="mt-1"><Tick n={recCountdown} label="Recording starts in" /></div>
+                  </div>
+                )}
+                {recPhase === "capturing" && (
+                  <div className="rounded-[var(--radius-card)] bg-wash px-5 py-5">
+                    <p className="mb-3 flex justify-between text-sm font-semibold text-ink" aria-live="polite">
+                      <span>Recording. Sign now.</span>
+                      <span className="tabular text-ink-muted">{Math.round(recProgress * 100)}%</span>
+                    </p>
+                    <div
+                      className="h-2 w-full overflow-hidden rounded-full bg-hairline"
+                      role="progressbar"
+                      aria-label="Recording progress"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(recProgress * 100)}
+                    >
+                      <div
+                        className="h-full origin-left rounded-full bg-ink transition-transform duration-100 ease-linear"
+                        style={{ transform: `scaleX(${recProgress})` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
           )}
         </div>
-
-        {/* ── Participant + hand + session start ── */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700" htmlFor="participant-id">
-            Participant ID
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <input
-              id="participant-id"
-              type="text"
-              value={participantId}
-              onChange={(e) => setParticipantId(e.target.value)}
-              placeholder="e.g. P01"
-              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              maxLength={40}
-            />
-            <Segmented options={HAND_OPTIONS} value={hand} onChange={setHand} disabled={calibInProgress} />
-            <button
-              type="button"
-              onClick={startSession}
-              disabled={!connected || !loaded || calibInProgress || recording || !participantId.trim()}
-              className="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
-            >
-              {activeSession ? "Start new session" : "Start session"}
-            </button>
-          </div>
-          <p className="text-xs text-gray-500">
-            Starting a session runs open-hand / closed-fist calibration and resets rep counts. The
-            hand applies to every sample in the session.
-            {activeSession && activeSession.hand !== hand && (
-              <span className="text-amber-700">
-                {" "}
-                Current session is {activeSession.hand === "L" ? "left" : "right"} hand — start a
-                new session to switch.
-              </span>
-            )}
-          </p>
-        </div>
-
-        {sessionMsg && (
-          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-            {sessionMsg}
-          </p>
-        )}
-        {restoreMsg && (
-          <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
-            {restoreMsg}
-          </p>
-        )}
-        {syncError && (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            {syncError}
-          </p>
-        )}
-        {saveError && (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            {saveError}
-          </p>
-        )}
-
-        {connected && calibInProgress && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1 text-center">
-            {calibStep === "open" && (
-              <>
-                <p className="text-2xl">🖐️</p>
-                <p className="font-semibold text-amber-800">Spread your hand OPEN</p>
-                <p className="text-4xl font-bold text-amber-600">{calibCountdown}</p>
-              </>
-            )}
-            {calibStep === "open_hold" && (
-              <>
-                <p className="text-2xl">🖐️</p>
-                <p className="font-semibold text-amber-800">Hold still… reading open hand</p>
-                <div className="w-full bg-amber-200 rounded-full h-2 mt-2">
-                  <div className="bg-amber-500 h-2 rounded-full animate-pulse w-full" />
-                </div>
-              </>
-            )}
-            {calibStep === "closed" && (
-              <>
-                <p className="text-2xl">✊</p>
-                <p className="font-semibold text-amber-800">Make a FIST</p>
-                <p className="text-4xl font-bold text-amber-600">{calibCountdown}</p>
-              </>
-            )}
-            {calibStep === "closed_hold" && (
-              <>
-                <p className="text-2xl">✊</p>
-                <p className="font-semibold text-amber-800">Hold still… reading closed fist</p>
-                <div className="w-full bg-amber-200 rounded-full h-2 mt-2">
-                  <div className="bg-amber-500 h-2 rounded-full animate-pulse w-full" />
-                </div>
-              </>
-            )}
-          </div>
-        )}
 
         {/* ── Live readings ── */}
         {connected && (
-          <div className="space-y-3 pt-2">
-            {FINGER_NAMES.map((name, i) => (
-              <div key={name}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">{name}</span>
-                  <span className="text-gray-400 text-xs">
-                    raw: {fingers[i]}
-                    {activeSession && (
-                      <span className="ml-2 font-medium text-gray-600">
-                        {bendPercents[i]}% bent
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-3">
-                  <div
-                    className="bg-indigo-500 h-3 rounded-full transition-all duration-100"
-                    style={{ width: `${bendPercents[i]}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-            <p className="text-xs text-gray-500 font-mono">
-              acc {imuValues.slice(0, 3).map((v) => v.toFixed(0)).join(" / ")} mg · gyro{" "}
-              {imuValues.slice(3, 6).map((v) => v.toFixed(1)).join(" / ")} dps · mag{" "}
-              {imuValues.slice(6, 9).map((v) => v.toFixed(1)).join(" / ")} µT
-            </p>
-          </div>
-        )}
-
-        {/* ── Record ── */}
-        {connected && activeSession && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
-            <p className="font-medium text-indigo-800">Record a sample</p>
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="text"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="Label (e.g. A, HELLO, NONE)"
-                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                maxLength={LABEL_MAX}
-                disabled={recording}
-              />
-              <Segmented
-                options={SIGN_TYPE_OPTIONS}
-                value={signType}
-                onChange={selectSignType}
-                disabled={recording}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                Window
-                <input
-                  type="number"
-                  value={windowMs || ""}
-                  onChange={(e) => setWindowMs(Number(e.target.value))}
-                  min={MIN_WINDOW_MS}
-                  max={MAX_WINDOW_MS}
-                  step={100}
-                  className={`w-24 px-3 py-2 border rounded-lg text-sm bg-white ${
-                    windowValid ? "border-gray-300" : "border-red-400"
-                  }`}
-                  disabled={recording}
-                />
-                ms
-              </label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes (optional)"
-                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                maxLength={NOTES_MAX}
-              />
-            </div>
-            {!windowValid && (
-              <p className="text-xs text-red-600">
-                Window must be between {MIN_WINDOW_MS} and {MAX_WINDOW_MS} ms.
-              </p>
-            )}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={recordSample}
-                disabled={recording || calibInProgress || !normalizedLabel || !windowValid}
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {recPhase === "countdown"
-                  ? `Starting in ${recCountdown}…`
-                  : recPhase === "capturing"
-                    ? "Recording…"
-                    : "Record"}
-              </button>
-              {normalizedLabel && (
-                <span className="text-xs text-indigo-700">
-                  Next: {normalizedLabel} rep {nextRepNum} · {signType} · {windowMs} ms
-                </span>
-              )}
-            </div>
-            {recPhase === "countdown" && (
-              <p className="text-4xl font-bold text-indigo-600 text-center">{recCountdown}</p>
-            )}
-            {recPhase === "capturing" && (
-              <div className="w-full bg-indigo-100 rounded-full h-2">
-                <div
-                  className="bg-indigo-600 h-2 rounded-full"
-                  style={{ width: `${Math.round(recProgress * 100)}%` }}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Sample log ── */}
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Samples ({samples.length})</p>
-              <TeamSyncStatus
-                team={team}
-                uploaded={samples.filter((s) => s.uploaded).length}
-                total={samples.length}
-                syncing={syncing}
-                onSync={sync}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={deleteLastSample}
-                disabled={!lastSample || recording}
-                className="px-3 py-1.5 rounded-md bg-white border border-slate-300 text-slate-800 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
-              >
-                Delete last sample
-                {lastSample && ` (${lastSample.label} rep ${lastSample.rep})`}
-              </button>
-              <button
-                type="button"
-                onClick={clearSavedData}
-                disabled={samples.length === 0 || recording}
-                className="px-3 py-1.5 rounded-md bg-white border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 disabled:opacity-50"
-              >
-                Clear saved data
-              </button>
-              <button
-                type="button"
-                onClick={downloadCsv}
-                disabled={samples.length === 0}
-                className="px-3 py-1.5 rounded-md bg-white border border-slate-300 text-slate-800 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
-              >
-                Download CSV
-              </button>
-            </div>
-          </div>
-          {samples.length > 0 && (
-            <ul className="max-h-64 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl text-sm">
-              {[...samples].reverse().map((s) => (
-                <li key={s.sample_id} className="flex items-center justify-between gap-2 px-3 py-2">
-                  <span className="text-gray-700 min-w-0">
-                    <span className="font-bold text-indigo-600">{s.label}</span> · rep {s.rep}
-                    <span className="ml-2 text-xs text-gray-500">
-                      {s.sign_type} · {s.frames.length} frames · {Math.round(sampleRateHz(s))} Hz
+          <Card
+            title="Live readings"
+            description={activeSession ? "Raw value and bend, using this session's calibration." : "Raw values. Start a session to see bends."}
+            className="lg:sticky lg:top-20"
+          >
+            <div className="space-y-3.5">
+              {FINGERS.map((f, i) => (
+                <div key={f.key}>
+                  <div className="mb-1 flex justify-between gap-2 text-sm">
+                    <span className="flex items-center gap-2 font-semibold text-ink">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: f.color }} aria-hidden />
+                      {f.name}
                     </span>
-                    <span className="ml-2 text-xs text-gray-400">
-                      {new Date(s.recorded_at).toLocaleTimeString()}
+                    <span className="tabular text-ink-muted">
+                      raw {fingers[i]}
+                      {activeSession && <span className="ml-2 font-semibold text-ink">{bendPercents[i]}% bent</span>}
                     </span>
-                  </span>
-                  <span className="flex flex-wrap justify-end gap-1 shrink-0">
-                    {sampleWarnings(s).map((w) => (
-                      <span
-                        key={w}
-                        className="px-2 py-0.5 rounded-md text-xs font-medium bg-amber-50 text-amber-700"
-                      >
-                        {w}
-                      </span>
-                    ))}
-                  </span>
-                </li>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full" style={{ background: fingerTint(f.color, 16) }} aria-hidden>
+                    <div
+                      className="h-full origin-left rounded-full transition-transform duration-100 ease-out"
+                      style={{ background: f.color, transform: `scaleX(${Math.max(0, Math.min(100, bendPercents[i])) / 100})` }}
+                    />
+                  </div>
+                </div>
               ))}
-            </ul>
-          )}
-        </div>
+            </div>
+            <dl className="mt-5 space-y-1.5 border-t border-hairline pt-4 text-sm">
+              {imuGroups.map((g) => (
+                <div key={g.name} className="flex justify-between gap-3">
+                  <dt className="text-ink-muted">{g.name}</dt>
+                  <dd className="tabular text-right text-ink">
+                    {g.values.join(" / ")} <span className="text-ink-muted">{g.unit}</span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+        )}
       </div>
+
+      {/* ── Sample log ── */}
+      <Card>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <h2 className="font-display text-heading text-ink">
+              Samples <span className="tabular text-ink-muted">({samples.length})</span>
+            </h2>
+            <TeamSyncStatus
+              team={team}
+              uploaded={uploadedCount}
+              total={samples.length}
+              syncing={syncing}
+              onSync={sync}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" size="sm" onClick={downloadCsv} disabled={samples.length === 0} className="max-md:h-11">
+              <Download className="h-4 w-4" aria-hidden />
+              Download CSV
+            </Button>
+            <Button variant="secondary" size="sm" onClick={deleteLastSample} disabled={!lastSample || recording} className="max-md:h-11">
+              <Undo2 className="h-4 w-4" aria-hidden />
+              Delete last sample
+              {lastSample && ` (${lastSample.label} rep ${lastSample.rep})`}
+            </Button>
+            <Button variant="danger" size="sm" onClick={clearSavedData} disabled={samples.length === 0 || recording} className="max-md:h-11">
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Clear saved data
+            </Button>
+          </div>
+        </div>
+
+        {samples.length > 0 ? (
+          <ul className="mt-5 max-h-80 divide-y divide-hairline overflow-y-auto rounded-[var(--radius-control)] border border-hairline text-sm">
+            {[...samples].reverse().map((s) => (
+              <li key={s.sample_id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
+                <span className="w-16 min-w-0 truncate font-display text-base font-bold text-ink" title={s.label}>
+                  {s.label}
+                </span>
+                <span className="tabular w-12 text-ink">rep {s.rep}</span>
+                <span className="w-16 text-ink-muted">{s.sign_type}</span>
+                <span className="tabular text-ink-muted">
+                  {s.frames.length} frames, {Math.round(sampleRateHz(s))} Hz
+                </span>
+                <span className="tabular text-ink-muted">{new Date(s.recorded_at).toLocaleTimeString()}</span>
+                <span className="flex flex-wrap gap-1 sm:ml-auto">
+                  {sampleWarnings(s).map((w) => (
+                    <span key={w} className="rounded-md bg-warn-wash px-2 py-0.5 text-xs font-semibold text-warn">
+                      {w}
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-5 rounded-[var(--radius-control)] bg-wash px-4 py-6 text-center text-sm text-ink-muted">
+            {loaded ? "No samples yet. Start a session and record one." : "Loading saved samples…"}
+          </p>
+        )}
+      </Card>
     </div>
   );
 }
@@ -701,21 +845,25 @@ function TeamSyncStatus({ team, uploaded, total, syncing, onSync }: {
 }) {
   if (team === "checking") return null;
   if (team === "offline") {
-    return <p className="text-xs text-amber-700">Can't reach the team dataset; samples stay in this browser.</p>;
+    return <p className="mt-1 text-sm font-semibold text-warn">Can't reach the team dataset; samples stay in this browser.</p>;
   }
   if (team === "not_member") {
     return (
-      <p className="text-xs text-gray-500">
+      <p className="mt-1 text-sm text-ink-muted">
         This account isn't on the team, so samples stay in this browser. Ask a teammate to add you.
       </p>
     );
   }
   const pending = total - uploaded;
   return (
-    <p className="text-xs text-gray-500">
-      {syncing ? "Uploading…" : `${uploaded} of ${total} in the team dataset`}
+    <p className="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-ink-muted" aria-live="polite">
+      <span className="tabular">{syncing ? "Uploading…" : `${uploaded} of ${total} in the team dataset`}</span>
       {!syncing && pending > 0 && (
-        <button type="button" onClick={onSync} className="ml-2 font-medium text-indigo-600 hover:underline">
+        <button
+          type="button"
+          onClick={onSync}
+          className="min-h-11 font-semibold text-ink underline decoration-hairline decoration-2 underline-offset-4 transition-colors duration-150 hover:decoration-ink md:min-h-0"
+        >
           Upload {pending} now
         </button>
       )}

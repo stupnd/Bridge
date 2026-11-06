@@ -17,6 +17,7 @@ import {
   upAxisLabel,
 } from "../lib/imu";
 import type { Recording } from "../lib/recordings";
+import { ChevronDown } from "lucide-react";
 import { Card } from "./common";
 
 const LIVE_REFRESH_MS = 250;
@@ -117,39 +118,44 @@ export default function MotionLab({ recordings }: { recordings: Recording[] }) {
     >
       <div className="space-y-6">
         {/* ── Live ── */}
-        <section className="rounded-xl bg-gray-50 p-4 text-center" aria-live="polite">
+        <section
+          className="flex min-h-[9rem] flex-col items-center justify-center rounded-[var(--radius-card)] bg-wash px-5 py-6 text-center"
+          aria-live="polite"
+        >
           {!connected ? (
-            <p className="text-sm text-gray-500">Connect the glove to try the model live.</p>
+            <p className="max-w-sm text-sm text-ink-muted">Connect the glove to try the model live.</p>
           ) : !results ? (
-            <p className="text-sm text-gray-500">
+            <p className="max-w-sm text-sm text-ink-muted">
               Record at least {MIN_PER_LABEL} samples each for two or more signs to train the model.
             </p>
           ) : prediction ? (
             <>
-              <p className="text-sm text-gray-500">The model thinks you're signing</p>
-              <p className="text-5xl font-semibold text-indigo-600">{prediction.label}</p>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="text-sm text-ink-muted">The model thinks you're signing</p>
+              <p className="mt-1 font-display text-[4.5rem] font-extrabold leading-none text-ink">{prediction.label}</p>
+              <p className="tabular mt-2 text-sm text-ink-muted">
                 {Math.round(prediction.confidence * 100)}% of the {chosen?.model.k} closest recordings agree
               </p>
             </>
           ) : (
-            <p className="text-sm text-gray-500">Waiting for readings…</p>
+            <p className="text-sm text-ink-muted">Waiting for readings…</p>
           )}
         </section>
 
         {/* ── Accuracy ── */}
         {results && chosen && (
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <section className="space-y-4">
+            <h3 className="font-display text-lg font-bold text-ink">On your recordings</h3>
+            <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
               <p>
-                <span className="text-2xl font-semibold text-gray-900">{Math.round(results.all.accuracy * 100)}%</span>{" "}
-                <span className="text-sm text-gray-600">accuracy with finger + motion data</span>
+                <span className="tabular font-display text-title font-bold text-ink">{Math.round(results.all.accuracy * 100)}%</span>{" "}
+                <span className="text-sm text-ink-muted">right with finger + motion data</span>
               </p>
-              <p className="text-sm text-gray-500">
-                {Math.round(results.flex.accuracy * 100)}% with finger data only
+              <p>
+                <span className="tabular font-display text-heading font-bold text-ink">{Math.round(results.flex.accuracy * 100)}%</span>{" "}
+                <span className="text-sm text-ink-muted">with finger data only</span>
               </p>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="max-w-prose text-sm text-ink-muted">
               Each recording is tested against all the others ({usable.length} recordings, {labels.length} signs
               {usable.length < recordings.length &&
                 `; ${recordings.length - usable.length} skipped because their sign has fewer than ${MIN_PER_LABEL}`}
@@ -160,12 +166,15 @@ export default function MotionLab({ recordings }: { recordings: Recording[] }) {
         )}
 
         {/* ── Advanced ── */}
-        <details className="text-sm">
-          <summary className="cursor-pointer text-gray-600 hover:text-gray-900">Advanced: motion features and rules</summary>
-          <div className="mt-4 space-y-6">
+        <details className="group border-t border-hairline pt-2 text-sm">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 font-semibold text-ink-muted transition-colors duration-150 hover:text-ink [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="h-4 w-4 transition-transform duration-150 ease-out group-open:rotate-180" aria-hidden />
+            Advanced: motion features and rules
+          </summary>
+          <div className="mt-4 space-y-8">
             {connected && live && (
               <section className="space-y-2">
-                <h3 className="font-medium text-gray-800">Live motion</h3>
+                <h3 className="font-display text-base font-bold text-ink">Live motion</h3>
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                   <Stat label="Orientation" value={upAxisLabel(live.gravity)} />
                   <Stat label="Rotation speed" value={`${Math.round(live.gyroRms)}°/s`} />
@@ -175,18 +184,18 @@ export default function MotionLab({ recordings }: { recordings: Recording[] }) {
                   />
                   <Stat label="Direction changes" value={String(live.reversals)} />
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm text-ink-muted">
                   Rules matching now: {activeRules.length ? activeRules.map((r) => r.label).join(", ") : "none"}
                 </p>
               </section>
             )}
             <section className="space-y-2">
-              <h3 className="font-medium text-gray-800">Motion per sign</h3>
+              <h3 className="font-display text-base font-bold text-ink">Motion per sign</h3>
               <FeatureTable recordings={recordings} />
             </section>
             <section className="space-y-2">
-              <h3 className="font-medium text-gray-800">Hand-written rules</h3>
-              <p className="text-xs text-gray-500">
+              <h3 className="font-display text-base font-bold text-ink">Hand-written rules</h3>
+              <p className="max-w-prose text-sm text-ink-muted">
                 How often each rule in <code>lib/imu.ts</code> fires on each sign's recordings. A good rule is near
                 100% on its own sign and near 0% elsewhere.
               </p>
@@ -201,9 +210,9 @@ export default function MotionLab({ recordings }: { recordings: Recording[] }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-gray-50 rounded-lg px-3 py-2 text-left">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="font-medium text-gray-800 tabular-nums">{value}</p>
+    <div className="rounded-[var(--radius-control)] bg-wash px-3 py-2.5 text-left">
+      <p className="text-xs text-ink-muted">{label}</p>
+      <p className="tabular font-semibold text-ink">{value}</p>
     </div>
   );
 }
@@ -218,30 +227,30 @@ function RuleTable({ recordings }: { recordings: Recording[] }) {
   const groups = groupByLabel(recordings);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs tabular-nums">
+      <table className="tabular w-full text-sm">
         <thead>
-          <tr className="text-left text-gray-500">
-            <th className="py-1 pr-2 font-medium">Rule</th>
+          <tr className="border-b border-hairline text-left text-ink-muted">
+            <th className="py-1.5 pr-2 font-medium">Rule</th>
             {groups.map(([label, rs]) => (
-              <th key={label} className="py-1 px-2 font-medium text-right">
-                {label} <span className="font-normal text-gray-400">({rs.length})</span>
+              <th key={label} className="py-1.5 px-2 font-medium text-right">
+                {label} <span className="font-normal text-ink-muted">({rs.length})</span>
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-hairline">
           {MOTION_RULES.map((rule) => (
             <tr key={rule.label}>
-              <td className="py-1 pr-2">
-                <span className="font-medium text-gray-800">{rule.label}</span>
-                <span className="block text-gray-400">{rule.description}</span>
+              <td className="py-1.5 pr-2">
+                <span className="font-semibold text-ink">{rule.label}</span>
+                <span className="block text-xs text-ink-muted">{rule.description}</span>
               </td>
               {groups.map(([label, rs]) => {
                 const pct = Math.round((rs.filter((r) => rule.test(r.features)).length / rs.length) * 100);
                 return (
                   <td
                     key={label}
-                    className={`py-1 px-2 text-right ${pct >= 50 ? "text-emerald-700 font-medium" : "text-gray-400"}`}
+                    className={`py-1.5 px-2 text-right ${pct >= 50 ? "font-semibold text-ok" : "text-ink-muted"}`}
                   >
                     {pct}%
                   </td>
@@ -251,14 +260,14 @@ function RuleTable({ recordings }: { recordings: Recording[] }) {
           ))}
         </tbody>
       </table>
-      {groups.length === 0 && <p className="text-xs text-gray-400 pt-1">No recordings yet.</p>}
+      {groups.length === 0 && <p className="pt-2 text-sm text-ink-muted">No recordings yet.</p>}
     </div>
   );
 }
 
 function FeatureTable({ recordings }: { recordings: Recording[] }) {
   const groups = groupByLabel(recordings);
-  if (groups.length === 0) return <p className="text-xs text-gray-400">No recordings yet.</p>;
+  if (groups.length === 0) return <p className="text-sm text-ink-muted">No recordings yet.</p>;
   const avg = (rs: Recording[], get: (f: Features) => number) =>
     rs.reduce((s, r) => s + get(r.features), 0) / rs.length;
   const cols: [string, (rs: Recording[]) => string][] = [
@@ -273,29 +282,29 @@ function FeatureTable({ recordings }: { recordings: Recording[] }) {
   ];
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs tabular-nums">
+      <table className="tabular w-full text-sm">
         <thead>
-          <tr className="text-left text-gray-500">
-            <th className="py-1 pr-2 font-medium">Label</th>
+          <tr className="border-b border-hairline text-left text-ink-muted">
+            <th className="py-1.5 pr-2 font-medium">Label</th>
             {cols.map(([name]) => (
-              <th key={name} className="py-1 px-2 font-medium text-right">{name}</th>
+              <th key={name} className="py-1.5 px-2 font-medium text-right">{name}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-hairline">
           {groups.map(([label, rs]) => (
             <tr key={label}>
-              <td className="py-1 pr-2 font-bold text-indigo-600">
-                {label} <span className="font-normal text-gray-400">({rs.length})</span>
+              <td className="py-1.5 pr-2 font-display font-bold text-ink">
+                {label} <span className="font-normal text-ink-muted">({rs.length})</span>
               </td>
               {cols.map(([name, fn]) => (
-                <td key={name} className="py-1 px-2 text-right text-gray-700">{fn(rs)}</td>
+                <td key={name} className="py-1.5 px-2 text-right text-ink">{fn(rs)}</td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="text-xs text-gray-400 pt-1">
+      <p className="max-w-prose pt-2 text-xs text-ink-muted">
         Averages per label. Columns that differ a lot between two labels are the ones that can
         tell them apart, e.g. two handshapes with the same finger bends but different tilt.
       </p>
@@ -312,30 +321,30 @@ function ConfusionTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="text-xs tabular-nums">
+      <table className="tabular text-sm">
         <thead>
-          <tr className="text-gray-500">
-            <th className="py-1 pr-2 text-left font-medium">Actual ↓ / predicted →</th>
+          <tr className="border-b border-hairline text-ink-muted">
+            <th className="py-1.5 pr-2 text-left font-medium">Actual ↓ / predicted →</th>
             {labels.map((l) => (
-              <th key={l} className="py-1 px-2 font-medium">{l}</th>
+              <th key={l} className="py-1.5 px-2 font-medium">{l}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {labels.map((actual) => (
             <tr key={actual}>
-              <td className="py-1 pr-2 font-bold text-indigo-600">{actual}</td>
+              <td className="py-1.5 pr-2 font-display font-bold text-ink">{actual}</td>
               {labels.map((pred) => {
                 const n = confusion[actual]?.[pred] ?? 0;
                 return (
                   <td
                     key={pred}
-                    className={`py-1 px-2 text-center ${
+                    className={`py-1.5 px-2 text-center ${
                       n === 0
-                        ? "text-gray-300"
+                        ? "text-ink-muted"
                         : pred === actual
-                          ? "bg-emerald-50 text-emerald-700 font-medium"
-                          : "bg-red-50 text-red-600 font-medium"
+                          ? "bg-ok-wash font-semibold text-ok"
+                          : "bg-danger-wash font-semibold text-danger"
                     }`}
                   >
                     {n}
@@ -346,7 +355,7 @@ function ConfusionTable({
           ))}
         </tbody>
       </table>
-      <p className="text-xs text-gray-400 pt-1">
+      <p className="max-w-prose pt-2 text-xs text-ink-muted">
         Red cells are mix-ups. If two letters only get confused under "Flex only", the 9-axis
         sensor is what separates them.
       </p>
