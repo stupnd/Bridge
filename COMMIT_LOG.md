@@ -2,6 +2,158 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-13 08:22 — Stuti Pandya · [`dc2e9a1`](https://github.com/stupnd/Bridge/commit/dc2e9a1404a4c2b1e89bf06b5c2d7227ec4ad780) · pushed by @stupnd
+
+**Merge pull request #9 from stupnd/feature/ui-redesign**
+
+Add collected ASL data and project documentation; ignore .DS_Store
+
+Files changed (62):
+- `.DS_Store` (binary)
+- `.agents/skills/supabase-postgres-best-practices/AGENTS.md` (+0 / −68)
+- `.agents/skills/supabase-postgres-best-practices/CLAUDE.md` (+0 / −68)
+- `.agents/skills/supabase-postgres-best-practices/README.md` (+0 / −116)
+- `.agents/skills/supabase-postgres-best-practices/SKILL.md` (+0 / −64)
+- `.agents/skills/supabase-postgres-best-practices/references/_contributing.md` (+0 / −171)
+- `.agents/skills/supabase-postgres-best-practices/references/_sections.md` (+0 / −39)
+- `.agents/skills/supabase-postgres-best-practices/references/_template.md` (+0 / −34)
+- `.agents/skills/supabase-postgres-best-practices/references/advanced-full-text-search.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/advanced-jsonb-indexing.md` (+0 / −49)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-idle-timeout.md` (+0 / −46)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-limits.md` (+0 / −44)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-pooling.md` (+0 / −41)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-prepared-statements.md` (+0 / −46)
+- `.agents/skills/supabase-postgres-best-practices/references/data-batch-inserts.md` (+0 / −54)
+- `.agents/skills/supabase-postgres-best-practices/references/data-n-plus-one.md` (+0 / −53)
+- `.agents/skills/supabase-postgres-best-practices/references/data-pagination.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/data-upsert.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-advisory.md` (+0 / −56)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-deadlock-prevention.md` (+0 / −68)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-short-transactions.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-skip-locked.md` (+0 / −54)
+- `.agents/skills/supabase-postgres-best-practices/references/monitor-explain-analyze.md` (+0 / −45)
+- `.agents/skills/supabase-postgres-best-practices/references/monitor-pg-stat-statements.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/monitor-vacuum-analyze.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/query-composite-indexes.md` (+0 / −44)
+- `.agents/skills/supabase-postgres-best-practices/references/query-covering-indexes.md` (+0 / −40)
+- `.agents/skills/supabase-postgres-best-practices/references/query-index-types.md` (+0 / −48)
+- `.agents/skills/supabase-postgres-best-practices/references/query-missing-indexes.md` (+0 / −43)
+- `.agents/skills/supabase-postgres-best-practices/references/query-partial-indexes.md` (+0 / −45)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-constraints.md` (+0 / −80)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-data-types.md` (+0 / −46)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-foreign-key-indexes.md` (+0 / −59)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-lowercase-identifiers.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-partitioning.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-primary-keys.md` (+0 / −61)
+- `.agents/skills/supabase-postgres-best-practices/references/security-privileges.md` (+0 / −54)
+- `.agents/skills/supabase-postgres-best-practices/references/security-rls-basics.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/security-rls-performance.md` (+0 / −57)
+- `.gitignore` (+5 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-43-43-538Z.csv` (+2 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-43-51-905Z copy.csv` (+2 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-43-51-905Z.csv` (+2 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-58-56-004Z.csv` (+2 / −0)
+- `data_collected/asl-frames-2026-10-24T17-43-43-538Z.csv` (+401 / −0)
+- `data_collected/asl-frames-2026-10-24T17-43-51-905Z copy.csv` (+401 / −0)
+- `data_collected/asl-frames-2026-10-24T17-43-51-905Z.csv` (+401 / −0)
+- `data_collected/asl-frames-2026-10-24T17-58-56-004Z.csv` (+2592 / −0)
+- `data_collected/asl-samples-2026-10-09T14-36-04-514Z.csv` (+25 / −0)
+- `documentation/Bridge-diagram-prompt-simple.txt` (+42 / −0)
+- `documentation/Bridge-diagram-prompt.txt` (+47 / −0)
+- `documentation/Bridge-midterm-breakdown.md` (+240 / −0)
+- `documentation/Bridge-report-browser-prompt.txt` (+53 / −0)
+- `documentation/Bridge-report-updates.docx` (binary)
+- `documentation/Bridge-report-updates.html` (+180 / −0)
+- `documentation/CEG4913_Midterm Pres.pptx` (binary)
+- `documentation/CEG4913_Midterm_Pres_updated(1).pptx` (binary)
+- `documentation/CEG4913_Midterm_Pres_updated.pptx` (binary)
+- `documentation/Midterm Report - Bridge (1).pdf` (binary)
+- `"documentation/capstone meetings \342\200\223 2026_10_20 16_00 EDT \342\200\223 Notes by Gemini.docx"` (binary)
+- `"documentation/capstone pitch meeting \342\200\223 2026_09_21 15_28 EDT \342\200\223 Notes by Gemini.docx"` (binary)
+- `skills-lock.json` (+0 / −10)
+
+### 2026-11-13 08:22 — Stuti Pandya · [`082f21f`](https://github.com/stupnd/Bridge/commit/082f21f457227976d0be821901ec1c2a800e9875) · pushed by @stupnd
+
+**Ignore local .claude skill links**
+
+Files changed (1):
+- `.gitignore` (+1 / −0)
+
+### 2026-11-13 08:21 — Stuti Pandya · [`8c3afcb`](https://github.com/stupnd/Bridge/commit/8c3afcb85e69dcf493b5fa2ee7fb61caaf8a929e) · pushed by @stupnd
+
+**Ignore local agent skills and skills-lock.json**
+
+Files changed (40):
+- `.agents/skills/supabase-postgres-best-practices/AGENTS.md` (+0 / −68)
+- `.agents/skills/supabase-postgres-best-practices/CLAUDE.md` (+0 / −68)
+- `.agents/skills/supabase-postgres-best-practices/README.md` (+0 / −116)
+- `.agents/skills/supabase-postgres-best-practices/SKILL.md` (+0 / −64)
+- `.agents/skills/supabase-postgres-best-practices/references/_contributing.md` (+0 / −171)
+- `.agents/skills/supabase-postgres-best-practices/references/_sections.md` (+0 / −39)
+- `.agents/skills/supabase-postgres-best-practices/references/_template.md` (+0 / −34)
+- `.agents/skills/supabase-postgres-best-practices/references/advanced-full-text-search.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/advanced-jsonb-indexing.md` (+0 / −49)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-idle-timeout.md` (+0 / −46)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-limits.md` (+0 / −44)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-pooling.md` (+0 / −41)
+- `.agents/skills/supabase-postgres-best-practices/references/conn-prepared-statements.md` (+0 / −46)
+- `.agents/skills/supabase-postgres-best-practices/references/data-batch-inserts.md` (+0 / −54)
+- `.agents/skills/supabase-postgres-best-practices/references/data-n-plus-one.md` (+0 / −53)
+- `.agents/skills/supabase-postgres-best-practices/references/data-pagination.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/data-upsert.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-advisory.md` (+0 / −56)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-deadlock-prevention.md` (+0 / −68)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-short-transactions.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/lock-skip-locked.md` (+0 / −54)
+- `.agents/skills/supabase-postgres-best-practices/references/monitor-explain-analyze.md` (+0 / −45)
+- `.agents/skills/supabase-postgres-best-practices/references/monitor-pg-stat-statements.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/monitor-vacuum-analyze.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/query-composite-indexes.md` (+0 / −44)
+- `.agents/skills/supabase-postgres-best-practices/references/query-covering-indexes.md` (+0 / −40)
+- `.agents/skills/supabase-postgres-best-practices/references/query-index-types.md` (+0 / −48)
+- `.agents/skills/supabase-postgres-best-practices/references/query-missing-indexes.md` (+0 / −43)
+- `.agents/skills/supabase-postgres-best-practices/references/query-partial-indexes.md` (+0 / −45)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-constraints.md` (+0 / −80)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-data-types.md` (+0 / −46)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-foreign-key-indexes.md` (+0 / −59)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-lowercase-identifiers.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-partitioning.md` (+0 / −55)
+- `.agents/skills/supabase-postgres-best-practices/references/schema-primary-keys.md` (+0 / −61)
+- `.agents/skills/supabase-postgres-best-practices/references/security-privileges.md` (+0 / −54)
+- `.agents/skills/supabase-postgres-best-practices/references/security-rls-basics.md` (+0 / −50)
+- `.agents/skills/supabase-postgres-best-practices/references/security-rls-performance.md` (+0 / −57)
+- `.gitignore` (+2 / −0)
+- `skills-lock.json` (+0 / −10)
+
+### 2026-11-13 08:20 — Stuti Pandya · [`e062cb1`](https://github.com/stupnd/Bridge/commit/e062cb13ac712c27456ef3c27200c157860d8ceb) · pushed by @stupnd
+
+**Add collected ASL data and project documentation; ignore .DS_Store**
+
+Files changed (23):
+- `.DS_Store` (binary)
+- `.gitignore` (+2 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-43-43-538Z.csv` (+2 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-43-51-905Z copy.csv` (+2 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-43-51-905Z.csv` (+2 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-58-56-004Z.csv` (+2 / −0)
+- `data_collected/asl-frames-2026-10-24T17-43-43-538Z.csv` (+401 / −0)
+- `data_collected/asl-frames-2026-10-24T17-43-51-905Z copy.csv` (+401 / −0)
+- `data_collected/asl-frames-2026-10-24T17-43-51-905Z.csv` (+401 / −0)
+- `data_collected/asl-frames-2026-10-24T17-58-56-004Z.csv` (+2592 / −0)
+- `data_collected/asl-samples-2026-10-09T14-36-04-514Z.csv` (+25 / −0)
+- `documentation/Bridge-diagram-prompt-simple.txt` (+42 / −0)
+- `documentation/Bridge-diagram-prompt.txt` (+47 / −0)
+- `documentation/Bridge-midterm-breakdown.md` (+240 / −0)
+- `documentation/Bridge-report-browser-prompt.txt` (+53 / −0)
+- `documentation/Bridge-report-updates.docx` (binary)
+- `documentation/Bridge-report-updates.html` (+180 / −0)
+- `documentation/CEG4913_Midterm Pres.pptx` (binary)
+- `documentation/CEG4913_Midterm_Pres_updated(1).pptx` (binary)
+- `documentation/CEG4913_Midterm_Pres_updated.pptx` (binary)
+- `documentation/Midterm Report - Bridge (1).pdf` (binary)
+- `"documentation/capstone meetings \342\200\223 2026_10_20 16_00 EDT \342\200\223 Notes by Gemini.docx"` (binary)
+- `"documentation/capstone pitch meeting \342\200\223 2026_09_21 15_28 EDT \342\200\223 Notes by Gemini.docx"` (binary)
+
 ### 2026-11-06 10:25 — Stuti Pandya · [`5e87d0d`](https://github.com/stupnd/Bridge/commit/5e87d0dffe95966b3e5a3571c1c2daf9a0b70d8f) · pushed by @stupnd
 
 **Redesign the frontend: new landing page, login, and app pages**
