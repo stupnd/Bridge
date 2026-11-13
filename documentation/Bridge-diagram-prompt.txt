@@ -1,0 +1,47 @@
+Create a clean system architecture diagram titled "Bridge: ASL Translation Glove System Architecture" for a university engineering report. Landscape, white background, rounded boxes grouped into labelled regions, readable 10–11 pt text. Use solid boxes/lines for built components and dashed boxes/lines for planned (not yet built) components. Include a legend.
+
+REGION 1 – GLOVES (top left)
+- "Right glove (built)" containing:
+  - 5 × flex sensors, 4.5" (thumb→pinky), each in a 10 kΩ voltage divider, read on A0–A3 and D2 (ADC1, 12-bit). Mounted in boning tape along the fingers.
+  - ICM-20948 9-axis IMU (accel, gyro, magnetometer), I²C at 100 kHz (SDA A4, SCL A5), 3.3 V.
+  - Arduino Nano ESP32 (ESP32-S3): samples every 20 ms (~50 Hz), sends one BLE notification per sample.
+  - ESP32 + IMU on a wrist-mounted protoboard.
+  - Arrows: flex sensors → ESP32 (analog), IMU → ESP32 (I²C).
+- "Left glove – same design, planned November 2026" (dashed box, same contents in short form).
+- Power (dashed, planned): 7.4 V 2500 mAh Li-ion pack + power switch → ESP32.
+- Small note box: "BLE packet: 56 bytes, little-endian = 9 × float32 IMU (accel mg, gyro °/s, mag µT) + 5 × int32 raw flex".
+
+REGION 2 – BODY UNIT: RASPBERRY PI 4B (bottom left, belt-mounted in a 3D-printed case)
+- "BLE receiver" (built, working): Python + asyncio + Bleak, receives ESP32 packets, one queue per glove.
+- "Body 9-axis IMU (ICM-20948)" (dashed, in progress): body reference frame for hand motion.
+- "Sign classifier" (dashed, planned November 2026): sequence model over flex + IMU frames.
+- "Piper text-to-speech" (built): offline ONNX voice, resampled to 48 kHz.
+- "USB speaker" (built).
+- Power (dashed, planned): USB battery bank → Pi.
+- Note: "DietPi OS · updates: copy files to the Pi as a USB drive → watcher detects changes (SHA-256) → runs main.py".
+- Flow: BLE receiver → sign classifier → text → Piper TTS → speaker (audio). Body IMU → sign classifier (dashed).
+
+REGION 3 – WEB APP in the browser (top right): "React 18 + TypeScript · Vite · Tailwind"
+- "SensorContext": one shared Web Bluetooth connection, decodes packets, calibration (open hand / fist → bend 0–100%), redraws once per screen frame.
+- "Glove simulator (dev only, 50 Hz)" (dashed outline) → SensorContext.
+- "Sign model: nearest-neighbour (interim)": 24 static letters, rejects matches >25% off, "unsure" below 15% confidence, 0.3 s smoothing, 0.7 s hold to type.
+- "Pages": Translate · Learn · Glove · Collect · Lab · Account.
+- "Browser storage (IndexedDB)": local recordings autosave, linked from Collect.
+- Flow: SensorContext → sign model → Pages (letter + confidence); SensorContext → Pages (bend %).
+
+REGION 4 – CLOUD (bottom right)
+- "Vercel": hosts the web app over HTTPS; GitHub main → production, every PR → preview link; CI type-check + build.
+- "Supabase": email/password auth + Postgres; team-only dataset (team_members · recording_sessions · recordings) protected by row-level security.
+- Arrows: Vercel → Web app ("serves app, HTTPS"); Web app ↔ Supabase ("sign-in + recording uploads, HTTPS").
+
+CONNECTIONS BETWEEN REGIONS
+- Blue path (Pi speech path): Glove ESP32 → BLE → Pi BLE receiver → classifier → TTS → speaker.
+- Orange path (browser path): Glove ESP32 → Web Bluetooth → SensorContext → Pages → Supabase.
+- The left glove connects to both receivers the same way, drawn dashed.
+
+LEGEND
+- Blue arrow: Pi speech path (glove → BLE → Pi → TTS → speaker)
+- Orange arrow: browser path (glove → Web Bluetooth → web app → Supabase)
+- Grey arrow: on-board wiring (analog / I²C)
+- Purple arrow: hosting
+- Dashed box or arrow: planned / not built yet
