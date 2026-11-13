@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge midterm report – updated sections</title>
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.4; max-width: 820px; margin: 24px auto; padding: 0 16px; color: #111; }
+  h1 { font-size: 18pt; } h2 { font-size: 14pt; margin-top: 28px; } h3 { font-size: 12pt; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px; }
+  th, td { border: 1px solid #999; padding: 4px 6px; vertical-align: top; text-align: left; }
+  th { background: #eee; }
+  .note { border: 1px solid #c90; background: #fff8e6; padding: 8px 12px; }
+</style>
+</head>
+<body>
+
+<h1>Bridge – updated midterm report sections</h1>
+
+
+<h2>System Diagram</h2>
+<p>Figure X shows the end-to-end architecture. Each glove samples five flex sensors and an ICM-20948 9-axis IMU every 20 ms on an Arduino Nano ESP32 and sends the readings as a 56-byte Bluetooth Low Energy (BLE) packet. Two receivers use this stream. The Raspberry Pi body unit (blue path) receives packets from the gloves, will classify the sign being performed, and speaks the result through a USB speaker using offline Piper text-to-speech. The web application (orange path) connects to the glove directly through Web Bluetooth to display translations, guide calibration, teach signs and collect labelled training data. The web application is hosted on Vercel and uses Supabase for user accounts and the team’s shared recording dataset. Dashed boxes mark components that are planned but not yet built.</p>
+
+<h2>5.2 Front-End (Graphical User Interface)</h2>
+<p>The front-end is a React and TypeScript web application built with Vite and Tailwind CSS. It connects to the glove, translates signs into text, guides sensor calibration, teaches signs with live feedback, and collects labelled training data for the recognition model. It is deployed at a public HTTPS address (Section 5.4), which Web Bluetooth requires.</p>
+<p>Since the CEG 4912 final report, the interface has been reorganized around what the user is doing rather than around the hardware: <b>Translate</b>, <b>Learn</b>, <b>Glove</b>, <b>Collect</b>, <b>Lab</b> and <b>Account</b>, plus the Login screen. Navigation uses client-side routing, and every page except Login requires the user to be signed in.</p>
+
+<h3>5.2.1 Glove Connection and Application Structure</h3>
+<p>In the first prototype, each page managed its own Bluetooth connection, so moving between pages dropped the connection and the user had to pair again. The connection logic was moved into a single shared component (SensorContext) that wraps every page. It opens one Web Bluetooth link to the ESP32, decodes each packet (nine IMU values as 32-bit floats followed by five flex readings as 32-bit integers) and makes the latest reading available everywhere. The glove sends about 50 packets per second, so the interface redraws at most once per screen refresh, while components that need every packet (such as the recorder) subscribe to the raw stream.</p>
+<p>The browser connects to the glove directly; the Raspberry Pi is a second, independent receiver. This allowed the interface to be developed against the real glove while the Pi was being set up. A development-only glove simulator generates realistic flex and IMU data at 50 Hz through the same path, so team members can work without the hardware.</p>
+<p><b>Calibration</b> is shared by every page. The user holds an open hand and then a fist; the averaged readings map each finger to 0% (straight) – 100% (bent). This adapts to different hand sizes and glove fit, works whichever way a sensor’s reading changes when bent, and is saved in the browser so it survives a page reload.</p>
+<p><b>User accounts</b> use Supabase Authentication (email and password). A protected-route wrapper checks for a valid session before any application page loads.</p>
+
+<h3>5.2.2 Translate</h3>
+<p>Translate replaces the earlier Dashboard as the main screen. The current sign is shown in large text; holding a sign steady for 0.7 seconds types it into a running text box with Space, Delete and Clear controls, and a Pause button stops detection. When the two most likely signs are too similar to call, the screen shows both (for example “Not sure: E or S?”) instead of typing a likely wrong answer. Recognition is described in Section 5.3.</p>
+
+<h3>5.2.3 Learn</h3>
+<p>Learn teaches the ASL alphabet in three modes. <b>Alphabet</b> shows every handshape with a diagram, plain-language instructions and common mistakes. <b>Practice with glove</b> compares the user’s live hand with the target and gives per-finger hints such as “Bend your index more”, highlighting the fingers that are off. <b>Quiz</b> shows a handshape and asks which letter it is. Progress is tracked per letter and summarized on the Account page.</p>
+
+<h3>5.2.4 Glove (Sensor and Calibration)</h3>
+<p>The Glove page replaces the earlier Sensor and Hand Visualizer pages. It shows a live hand diagram whose fingers bend with the user’s, per-finger bend bars, the guided calibration, and the health of the motion sensor (which way the hand faces, roll and pitch, and raw accelerometer, gyroscope and magnetometer values). If the IMU stops responding, for example because of a loose wire, the page says so and the glove keeps sending flex data.</p>
+
+<h3>5.2.5 Data Collection (Collect)</h3>
+<p>Training the recognition model requires labelled glove recordings from several team members. The Collect page went through two versions this term.</p>
+<p>The first version (September 2026) averaged a short burst of readings for each sign into a single row. Averaging works for static letters but removes the motion that defines moving signs such as J, Z and HELLO: the average of the start and end of a movement is an in-between hand shape that never actually occurs. When the team decided on one sequence-based model for all signs, the page was rewritten (October 2026) to keep every frame:</p>
+<ul>
+<li><b>Sessions:</b> a participant ID and left or right hand, then a guided open-hand / closed-fist calibration stored with the session so recordings can be re-normalized later.</li>
+<li><b>Sign types:</b> Static (1.5 s), Moving (2.5 s) and None (2.0 s, a resting hand). Labels are free text, so whole signs such as HELLO can be recorded, and the window can be changed.</li>
+<li><b>Frame-by-frame capture:</b> after a countdown, every packet in the window is stored with its timestamp, five raw and calibrated flex values and nine IMU values. Each sample is flagged if its rate drops below 15 Hz or the IMU is not reporting.</li>
+<li><b>Storage:</b> recordings autosave in the browser and export as a frame CSV plus a calibration CSV.</li>
+<li><b>Team dataset:</b> each recording also uploads to a shared Supabase database as one row with its frames stored as JSON (about 125 frames for a 2.5-second sign), which avoids the row-per-frame volume that made the first version’s syncing impractical. Only team members can read or upload (Section 5.4).</li>
+</ul>
+
+<h3>5.2.6 Lab</h3>
+<p>The Lab is a workbench for testing and improving recognition. A <b>virtual glove</b> (one slider per finger) lets the team try any hand shape without hardware, load a recorded letter and add random “wiggle” to see when it breaks; a <b>live glove</b> mode does the same with the real glove. For each hand shape it shows the predicted sign, the five closest signs and how far each is. Training samples can be added from the current hand, imported from CSV, from the Collect page or from the team dataset, and exported. <b>Teach it your hand</b> walks a new user through every static letter (plus a resting hand) for one to three rounds so the model adapts to them. A <b>robustness test</b> reports, for each letter, how often it is still recognized under noise, how often the system says “unsure”, and how often it gives a wrong letter.</p>
+
+<h2>5.3 Sign Recognition</h2>
+<p><b>Rule-based baseline (until October 2026).</b> Each letter was described as a pattern of bent and straight fingers. This needed no training data, but it could only recognize 10 of the 26 letters (A, B, D, F, I, L, S, U, W, Y). The rest share their finger bends with another letter: E, M, N, S and T are all closed fists that differ by thumb position; U, V, R and H differ by finger spread or crossing; G/L/Q and K/P differ by orientation; and J and Z need movement. This showed that flex sensors alone cannot separate every sign, which is the main reason for the IMU and a trained model.</p>
+<p><b>Current: data-driven nearest-neighbour model.</b> The hand-written rules were replaced by a model learned from recorded samples. Each sample is five calibrated bend values; a live hand is labelled with the sign of its closest sample, measured as the average difference per finger. Adding or replacing samples retrains it instantly. It recognizes all 24 static letters. Three safeguards make it usable live:</p>
+<table>
+<tr><th>Safeguard</th><th>Setting</th><th>Purpose</th></tr>
+<tr><td>Rejection</td><td>No sign if the closest sample is more than 25% away</td><td>A relaxed hand or a transition between signs types nothing</td></tr>
+<tr><td>Confidence gate</td><td>“Unsure” if the best match is less than 15% closer than the second</td><td>Show “E or S?” instead of a likely wrong letter</td></tr>
+<tr><td>Smoothing</td><td>A sign must win 60% of the last 0.3 s</td><td>Stops flicker from sensor noise</td></tr>
+</table>
+<p><b>Why nearest-neighbour now, and why a different model later.</b> With only one recorded sample per letter, a trained classifier would simply memorize those samples, so nearest-neighbour gives the same result while staying transparent (the Lab shows exactly which samples a decision came from) and needing no training step. It is an interim baseline for static handshapes. It cannot recognize signs defined by movement, because it compares a single hand shape. Once multi-person data has been collected, the team will train the planned sequence-based model, which reads the whole recording over time, uses the IMU, and covers letters and word signs together. It will be compared against this baseline using leave-one-person-out evaluation (train on everyone except one person, test on that person).</p>
+<p>A second experimental tool, Motion Lab on the Collect page, already compares a k-nearest-neighbours classifier on flex-only features with one on flex plus 9-axis features (hand orientation, rotation, jerkiness and back-and-forth motion), and tests simple motion rules for J and Z. It has not yet been evaluated on real data.</p>
+
+<h2>5.4 Cloud Services and Deployment</h2>
+<p>The system has no custom backend server. The web application runs in the browser and uses two hosted services.</p>
+<p><b>Supabase</b> provides email/password accounts and a Postgres database for the team’s recordings. The prototype tables from last term were replaced on October 23; one of them had access control disabled, so anyone holding the public key could read or edit it. The new design has three tables (team_members, recording_sessions and recordings) protected by row-level security: signed-out visitors have no access, only accounts on the team list can read or upload, users can change only their own recordings, and no one can add themselves to the team from the application. These rules were verified with eight tests that impersonate a team member, a signed-in outsider and a signed-out visitor; all eight passed. Database changes are kept as version-controlled migration files in the repository.</p>
+<p><b>Vercel</b> hosts the web application over HTTPS, which Web Bluetooth requires. It is connected to the GitHub repository: changes merged into the main branch deploy to the public site automatically, and every branch or pull request gets its own preview link. A GitHub Actions check type-checks and builds the application on every pull request. Unused code and packages from the original Figma prototype were removed (runtime dependencies went from 49 to 9).</p>
+
+<h2>5.5 Latency and Power Budget</h2>
+<h3>Latency (glove to text on screen)</h3>
+<table>
+<tr><th>Stage</th><th>Time</th><th>Source</th></tr>
+<tr><td>Sensor sampling</td><td>20 ms</td><td>Firmware sample interval (≈50 Hz)</td></tr>
+<tr><td>BLE transmission</td><td>15–30 ms</td><td>Connection interval requested by the firmware</td></tr>
+<tr><td>Decode and classify in browser</td><td>&lt; 1 ms (estimate)</td><td>Distance to 24 samples × 5 values</td></tr>
+<tr><td>Screen update</td><td>≤ 17 ms</td><td>One display frame at 60 Hz</td></tr>
+<tr><td>Smoothing</td><td>300 ms</td><td>Application setting</td></tr>
+<tr><td>Hold to type</td><td>700 ms</td><td>Application setting (deliberate)</td></tr>
+<tr><td><b>Total</b></td><td><b>≈ 1.05 s</b></td><td>Within the 5–10 s requirement</td></tr>
+</table>
+<p>The sign is shown about 0.35 s after the hand forms it; the remaining time is the deliberate hold before it is typed. The Raspberry Pi path adds text-to-speech synthesis time, which has not been measured yet.</p>
+
+<h3>Power (rough estimate – to be measured)</h3>
+<table>
+<tr><th>Load</th><th>Estimated draw</th><th>Notes</th></tr>
+<tr><td>Arduino Nano ESP32 with BLE active</td><td>≈ 40–120 mA</td><td>Typical ESP32-S3 range with the radio on; largest glove load</td></tr>
+<tr><td>ICM-20948 IMU (all sensors on)</td><td>≈ 3 mA</td><td>Datasheet order of magnitude</td></tr>
+<tr><td>5 flex sensors with 10 kΩ resistors</td><td>&lt; 1 mA total</td><td>3.3 V across 20–120 kΩ per divider</td></tr>
+<tr><td>Raspberry Pi 4B with speaker</td><td>≈ 3–6 W</td><td>Idle to load; speaker adds a little while talking</td></tr>
+</table>
+<p>At these figures, the glove’s 7.4 V 2500 mAh pack would last well over a full day of use even after regulator losses, so glove runtime is not expected to be a constraint. The Pi’s runtime is the battery bank’s capacity in watt-hours divided by about 3–6 W. Both will be confirmed with a USB power meter and a timed run once the hardware is assembled (see the battery tests in Section 7).</p>
+
+<h2>Implemented System Solution – GUI and Recognition</h2>
+<p><b>GUI</b></p>
+<ul>
+<li>Single shared glove connection and calibration across all pages</li>
+<li>Translate: live text with hold-to-type, confidence and “unsure” display</li>
+<li>Learn: alphabet reference, glove practice with per-finger hints, quiz and progress tracking</li>
+<li>Glove: live hand position diagram, calibration, motion-sensor health</li>
+<li>Collect: frame-by-frame recording, CSV export, upload to the team dataset</li>
+<li>Lab: virtual and live glove testing, training-data editing, guided personal recording, robustness test</li>
+<li>Deployed on Vercel with automatic deployments; sign-in with Supabase</li>
+</ul>
+<p><b>Recognition</b></p>
+<ul>
+<li>Rule-based recognition (10 letters) replaced by a data-driven nearest-neighbour model (24 static letters)</li>
+<li>Smoothing, rejection and confidence gate for live use</li>
+<li>Motion features from the IMU implemented and being evaluated (Motion Lab); sequence model for moving and word signs planned for November</li>
+</ul>
+
+<h2>Task Breakdown – Software (UI and Recognition)</h2>
+<table>
+<tr><th>Status</th><th>Tasks</th></tr>
+<tr><td>Done</td><td>Shared BLE connection and calibration; Translate, Learn, Glove, Collect and Lab pages; static-letter recognition (24 letters); frame-by-frame data collection with export; secure team dataset; deployment and CI</td></tr>
+<tr><td>In progress</td><td>End-to-end upload test from the deployed site; multi-person data collection; evaluating IMU features</td></tr>
+<tr><td>To do</td><td>Sequence model for letters and word signs; deploy the model to the Raspberry Pi; system logging</td></tr>
+</table>
+
+<h2>Risks That Occurred (software and electronics)</h2>
+<table>
+<tr><th>Risk</th><th>What happened</th><th>Response</th></tr>
+<tr><td>Sensor noise</td><td>The pinky reading was noisy while Bluetooth was on (its pin used the ESP32’s ADC2, which the radio disturbs)</td><td>Moved the pinky to pin D2 on ADC1</td></tr>
+<tr><td>IMU reliability</td><td>Loose wires made the IMU stop responding and its values freeze at zero</td><td>Firmware detects 10 failed reads, keeps flex data flowing and reconnects every 5 s; I²C slowed to 100 kHz with a bus timeout; the app shows motion-sensor status; added an I²C wiring-check sketch</td></tr>
+<tr><td>Toolchain</td><td>Bluetooth hung when firmware was built with the esp32:esp32 board package</td><td>Standardized on the arduino:esp32 package</td></tr>
+<tr><td>Flex sensor limits</td><td>Flex sensors alone cannot separate letters such as E/S/T or U/V</td><td>Data-driven model with an “unsure” output; IMU features and multi-person data planned</td></tr>
+<tr><td>Data security</td><td>A prototype database table was editable by anyone holding the public key</td><td>Replaced with team-only tables protected by row-level security; verified with eight access tests</td></tr>
+<tr><td>Data loss during collection</td><td>Recordings lived only in one browser tab</td><td>Browser autosave, CSV export and upload to the team dataset</td></tr>
+</table>
+
+<h3>Li-ion Battery Safety (draft for the hardware team)</h3>
+<ul>
+<li>Use only packs with built-in protection (over-charge, over-discharge and short-circuit) and charge them with a matching charger.</li>
+<li>Never charge unattended or while worn; charge on a non-flammable surface or in a LiPo-safe bag.</li>
+<li>Insulate all exposed terminals and connectors; add a power switch and an inline fuse between the pack and the circuit.</li>
+<li>Inspect packs before each use; stop using any pack that is swollen, punctured, hot or damaged.</li>
+<li>Keep packs away from sweat and moisture inside the glove and body unit, and allow for airflow.</li>
+<li>Store at partial charge and dispose of damaged cells through proper battery recycling.</li>
+</ul>
+
+<h2>Division of Labour – Stuti</h2>
+<ul>
+<li>Rebuilt the web application around one shared glove connection and calibration used by every page</li>
+<li>Designed and built the Translate, Learn (glove practice and quiz), Glove and Lab pages, including the live hand position diagram</li>
+<li>Replaced the rule-based recognition (10 letters) with a data-driven nearest-neighbour model (24 static letters), with smoothing and a confidence gate; built the Lab to test and improve it</li>
+<li>Integrated Krisha’s data-collection rewrite with the shared sensor layer; added Motion Lab for comparing flex-only and flex + IMU classifiers</li>
+<li>Firmware: combined flex and IMU data in one BLE packet at 50 Hz; fixed pinky noise; IMU auto-reconnect; I²C wiring-check and two-hand IMU test sketches</li>
+<li>Deployed the application on Vercel with automatic deployments and pull-request checks; removed unused code and dependencies; moved configuration to environment variables</li>
+<li>Replaced the prototype Supabase tables with a secure team-only recording dataset (row-level security, migrations, access tests) and connected the Collect page to it</li>
+<li><b>Upcoming:</b> train and evaluate the sequence-based model on the team dataset; evaluate IMU features for look-alike signs; help connect the classifier to the Raspberry Pi</li>
+</ul>
+
+<h2>Obtained Results – software rows</h2>
+<table>
+<tr><th>Requirement</th><th>Obtained Result</th><th>Pass / Fail</th></tr>
+<tr><td>GUI Navigation</td><td>All pages load and switch without console errors in Chrome (tested with the simulated glove); the deployed site serves every page address directly.</td><td>Pass</td></tr>
+<tr><td>User Authentication</td><td>Valid accounts sign in and reach the app; signed-out users are sent back to Login. Invalid-credential test still to be run and recorded.</td><td>Partial</td></tr>
+<tr><td>ASL Gesture Recognition (≥90%)</td><td>Not yet measurable against the target: training data is one sample per letter from one person. Robustness test with ±10% random finger noise: 90% correct, 7% “unsure”, 3% wrong letter across 24 static letters. The 10-repetition test is planned after multi-person data collection.</td><td>Pending</td></tr>
+<tr><td>Wireless Data Transmission (to web app)</td><td>Glove streams flex and IMU data to the browser at about 50 packets per second; formal packet-loss measurement not yet recorded.</td><td>Partial</td></tr>
+<tr><td>Translation Display (5–10 s)</td><td>About 1.05 s from forming a sign to text, by design (Section 5.5): shown after ≈0.35 s, typed after a 0.7 s hold. Stopwatch measurement to be recorded.</td><td>Pass (by design)</td></tr>
+<tr><td>Data security (new)</td><td>8 of 8 row-level-security tests passed: outsiders and signed-out visitors cannot read or upload; members cannot forge another user’s data or add themselves to the team.</td><td>Pass</td></tr>
+<tr><td>Build and deployment (new)</td><td>Type-check and production build pass on every pull request; the site deploys automatically to Vercel.</td><td>Pass</td></tr>
+</table>
+
+<h3>Software status table – suggested updates</h3>
+<table>
+<tr><th>Requirement</th><th>Updated status</th></tr>
+<tr><td>Wireless Sensor Communication</td><td>Working – the Raspberry Pi receives ESP32 data over BLE, and the web app receives it over Web Bluetooth at about 50 packets per second. Full testing waits for the finalized glove hardware; the second glove is scheduled for November 2026.</td></tr>
+<tr><td>Gesture Data Processing</td><td>Partially implemented – static letters recognized with a nearest-neighbour model; sequence model for all signs scheduled for November 2026.</td></tr>
+<tr><td>Gesture Data Storage</td><td>Done – frame-by-frame recordings stored in a secure, team-only Supabase dataset (end-to-end upload test in progress) and exportable as CSV.</td></tr>
+<tr><td>ASL Phrase Recognition</td><td>Not yet implemented – the 24 static letters work; word and phrase signs await the sequence model and data collection.</td></tr>
+<tr><td>Graphical User Interface</td><td>Implemented – six pages, deployed at a public HTTPS address.</td></tr>
+<tr><td>User Authentication</td><td>Done – Supabase email/password sign-in with protected pages.</td></tr>
+</table>
+
+</body>
+</html>

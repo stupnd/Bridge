@@ -1,0 +1,42 @@
+Simplify this diagram for a report figure. Keep the same title, four regions, colours, arrow styles, solid = built / dashed = planned, and legend. Use far less text: every box gets a short name plus at most one short line, and no box has more than ~8 words. Make the diagram more compact with more white space. Remove all the technical details listed under REMOVE (they are explained in the report text instead).
+
+1 GLOVES
+- Right glove (solid), containing three boxes:
+  - "5 flex sensors" / "finger bend"
+  - "9-axis IMU" / "hand motion"
+  - "Arduino Nano ESP32" / "~50 Hz, Bluetooth LE"
+  - grey arrows: flex sensors → ESP32, IMU → ESP32
+- "Left glove" / "same design, Nov 2026" (dashed)
+- "Battery" / "7.4 V Li-ion" (dashed) → ESP32
+
+2 BODY UNIT (Raspberry Pi 4B, belt-mounted)
+- "BLE receiver" (solid)
+- "Sign classifier" / "planned Nov 2026" (dashed)
+- "Body IMU" / "in progress" (dashed) → Sign classifier
+- "Text-to-speech" / "Piper, offline" (solid)
+- "Speaker" (solid)
+- "Battery bank" (dashed) → Pi
+- flow: BLE receiver → Sign classifier → Text-to-speech → Speaker
+
+3 WEB APP (browser)
+- "Glove connection" / "Web Bluetooth + calibration" (solid)
+- "Sign model" / "24 static letters (interim)" (solid)
+- "Pages" (solid), one line: "Translate · Learn · Glove · Collect · Lab"
+- flow: Glove connection → Sign model → Pages
+
+4 CLOUD
+- "Vercel" / "hosting" (solid) → Web app, label "HTTPS"
+- "Supabase" / "accounts + team dataset" (solid) ↔ Pages, label "sign-in, uploads"
+
+CONNECTIONS
+- Blue: Right glove ESP32 → "BLE" → BLE receiver
+- Orange: Right glove ESP32 → "Web Bluetooth" → Glove connection
+- Left glove: dashed blue and dashed orange arrows to the same two places
+
+REMOVE
+- The BLE packet note box and the DietPi / USB-drive update note box
+- The glove simulator box and the browser storage (IndexedDB) box
+- Pin numbers, resistor values, I2C speed, "boning tape", "wrist-mounted protoboard" label, ONNX/48 kHz, asyncio/Bleak, smoothing/threshold numbers, table names, GitHub/CI details, "React 18 + TypeScript · Vite · Tailwind"
+- The separate "Account" page box (fold into the Pages line)
+
+LEGEND (one row): Pi speech path (blue) · Browser path (orange) · On-board wiring (grey) · Hosting (purple) · Built (solid box) · Planned (dashed box)

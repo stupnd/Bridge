@@ -1,0 +1,53 @@
+You are helping update our team's shared midterm report ("Midterm Report - Bridge", CEG 4913, Group 4), which is open in this Google Doc. Several teammates are editing it at the same time, so follow these rules exactly:
+
+RULES
+1. Before changing anything, switch the doc to Suggesting mode (pencil icon at top right → "Suggesting"). Every edit must be a suggestion, never a direct edit.
+2. Make small, targeted edits only. Do not rewrite, reorder, restyle or delete anyone's section beyond the specific fixes listed below. Do not create a new document.
+3. Only use the facts in the FACT SHEET. Never invent numbers, test results, dates or names. If something needs information you don't have, add a comment instead of editing (Insert → Comment) starting with "Needs input:".
+4. Keep the writing style of the surrounding text (formal, third person, "the team").
+5. Before each edit, re-read the text around it, since a teammate may already have changed it. If it's already correct, skip it.
+6. When finished, give me a list of every suggestion and comment you made, with the section name.
+
+FACT SHEET (source of truth, as of Oct 23 2026)
+Glove
+- First (right) glove built: 5 × 4.5" flex sensors (each with a 10 kΩ resistor; power, ground and signal), ICM-20948 9-axis IMU, Arduino Nano ESP32. Flex sensors are held in boning tape. ESP32 and IMU on a wrist-mounted protoboard.
+- Second glove: same design, scheduled for November 2026 (not built yet).
+- Firmware samples every 20 ms (~50 Hz) and sends a 56-byte BLE packet: 9 × float32 IMU values then 5 × int32 raw flex readings.
+- Glove battery (7.4 V Li-ion, 2500 mAh) and power switch: planned, not integrated yet.
+Raspberry Pi body unit
+- Raspberry Pi 4B running DietPi, configured as a USB gadget; a watcher script detects changed files by SHA-256 and runs main.py.
+- BLE reception from the ESP32 WORKS (Bleak library, Python 3.12.10). Full testing waits for the finalized glove hardware.
+- Piper text-to-speech works through the USB speaker; output resampled to 48 kHz.
+- Body 9-axis IMU: in progress. Sign classifier on the Pi: planned for November 2026.
+- Belt mount with 3D-printed case: scheduled for early November. Pi will use a USB battery bank.
+Web app (front-end)
+- React + TypeScript, Vite, Tailwind CSS. Deployed on Vercel at https://bridge-kohl-six.vercel.app (auto-deploys from GitHub; every pull request gets a preview link and an automatic build check).
+- Pages: Login, Translate, Learn, Glove, Collect, Lab, Account. (The old Dashboard, Sensor and Hand Visualizer pages were replaced: Dashboard → Translate; Sensor + Hand Visualizer → Glove.)
+- One shared Bluetooth connection (SensorContext) for all pages; shared calibration (open hand / fist → 0–100% bend) saved in the browser; dev-only glove simulator at 50 Hz.
+- Translate: shows the current sign; holding it 0.7 s types it; shows "Not sure: E or S?" when two signs are too close; Pause/Space/Delete/Clear.
+- Learn: 26-letter alphabet with diagrams and instructions, glove practice with per-finger hints, and a quiz, with progress tracking. It does NOT have phrase categories, search or videos.
+- Glove: live hand diagram, calibration, motion-sensor status.
+- Collect: sessions (participant ID, left/right hand, calibration); sign types Static (1.5 s), Moving (2.5 s) and None (2.0 s, resting hand); free-text labels; every frame stored; browser autosave; frame CSV + calibration CSV export; each recording ALSO uploads to the team's Supabase dataset (one row per recording, frames stored as JSON).
+- Lab: virtual glove (finger sliders), live glove testing, training-data editing and import, guided "Teach it your hand" recording, robustness test.
+Recognition
+- Old: rule-based (bent/straight per finger), recognized only 10 of 26 letters (A B D F I L S U W Y).
+- Current: data-driven nearest-neighbour model on calibrated flex readings, recognizes all 24 static letters (not J, Z); rejects matches >25% away; says "unsure" below 15% confidence; 0.3 s smoothing. This is an interim baseline; the planned sequence-based model (letters + word signs, uses the IMU) is scheduled for November 2026.
+- Robustness test (±10% random finger noise, 1 sample per letter from 1 person): 90% correct, 7% unsure, 3% wrong. This is NOT real-world accuracy; the ≥90% 10-repetition test is still pending.
+Supabase
+- Email/password sign-in: done and working.
+- The prototype tables (DEMO, USERS, CUSTOM_SIGNS, ML tables) were replaced on Oct 23 (DEMO was publicly editable) by team_members, recording_sessions and recordings, protected by row-level security (team-only). 8 of 8 access tests passed.
+Latency: ≈1.05 s from forming a sign to text (shown after ≈0.35 s, typed after a 0.7 s hold) – meets the 5–10 s requirement (by design; stopwatch test not yet recorded).
+
+EDITS TO MAKE
+A. Section 5.1.2 (gloves): change the sentence saying the flex sensors and IMUs "on both gloves are functioning" so it says they function on the first glove and the second glove uses the same design, scheduled for November 2026.
+B. Implemented System / Body Unit: make sure the Pi's BLE reception is described as working. Make the body 9-axis sensor status "in progress" everywhere it appears (Implemented System and the hardware test table must agree).
+C. Section 5.2 (front-end): correct any page names, features or statuses that contradict the FACT SHEET (old pages Dashboard/Sensor/Hand Visualizer, rule-based recognition described as current, "three views to six" list). Keep edits minimal; if a subsection is mostly wrong, suggest a replacement paragraph for that subsection only.
+D. Section 5.2.3 (Learning page): rewrite to describe what the app has (alphabet, glove practice with hints, quiz, progress). Remove the claims about phrase categories, search and demonstration videos.
+E. Section 5.2.4: remove or correct the claim that recorded gestures are saved to a Supabase gesture table used by the Dashboard.
+F. Section 5.2.5: correct "Supabase syncing was removed" – syncing is back in a new form (one row per recording, frames as JSON, team-only). Add the "None" sign type (2.0 s) to the sign-types list.
+G. Software status table: update User Authentication → "Done – Supabase email/password sign-in with protected pages"; GUI → "Implemented – deployed web app with Translate, Learn, Glove, Collect, Lab and Account pages"; Wireless Sensor Communication → "Working – the Pi receives ESP32 data over BLE; full testing waits for the finalized glove hardware"; Gesture Data Storage → "Done – recordings stored in a secure team-only Supabase dataset and exportable as CSV"; Gesture Data Processing → "Partially implemented – static letters recognized with an interim nearest-neighbour model; sequence model scheduled for November 2026".
+H. Obtained Results tables: wherever a cell is "?" and the FACT SHEET has the answer, fill it in (GUI navigation: pass; user authentication: valid sign-in works, invalid-credential test still to be recorded; gesture recognition: robustness result above, marked as not real-world accuracy; translation display: ≈1.05 s by design). If the table has no "Actual Result / Pass-Fail" column, add a comment suggesting one instead of restructuring the table. Leave hardware "?" cells alone and comment "Needs input: hardware team".
+I. Krisha's division-of-labour row: after the DEMO/USERS/CUSTOM SIGNS database item, add "(replaced in October 2026 by the secure team recordings dataset)".
+J. Add comments (do not edit) on: the feedback table at the top (rows i–vii) – "Remove before submitting?"; each leftover placeholder or internal note (e.g. "[Paragraph about 9-axis sensor (Gauthier)]", "ML: Hard coded for now?", "Make more vague…", "Actually thing u did…", "Table _") – "Placeholder: fill in or remove"; the empty table of contents – "Fill in before submitting"; the Project Scheduling table – "TA asked for planned vs actual: add a Status column (Done / In progress / Late)".
+
+Do not touch any other content. Start by switching to Suggesting mode, then work through A–J in order.

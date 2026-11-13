@@ -12,3 +12,5 @@ node_modules
 # bunshin run artifacts
 .bunshin/
 !.env.capture
+
+.DS_Store
