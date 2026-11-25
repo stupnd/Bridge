@@ -2,6 +2,57 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-25 15:18 — William · [`d496bf8`](https://github.com/stupnd/Bridge/commit/d496bf8da8734924060c4347a36c228e584e7127) · pushed by @TheCakeOfTruth
+
+**Merge pull request #10 from stupnd/rasppi-bluetooth**
+
+Merge changes from rasppi-bluetooth
+
+Files changed (11):
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/rasppi-test/main.py` (+34 / −0)
+- `RaspPi/rasppi-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/rasppi-test/modules/bluetooth.py` (+41 / −0)
+- `RaspPi/rasppi-test/modules/tts.py` (+50 / −0)
+- `RaspPi/rasppi-test/requirements.txt` (binary)
+- `RaspPi/tts-test/main.py` (+0 / −4)
+- `RaspPi/tts-test/modules/.gitignore` (+0 / −1)
+- `RaspPi/tts-test/modules/bluetooth.py` (+0 / −59)
+- `RaspPi/tts-test/modules/tts.py` (+0 / −47)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
+### 2026-11-25 15:12 — Cake · [`42c7db5`](https://github.com/stupnd/Bridge/commit/42c7db5b58b021b15c6d783429b32e61e9ebe1d9) · pushed by @TheCakeOfTruth
+
+**Updated instructions for bluetooth setup**
+
+Files changed (1):
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+
+### 2026-10-23 09:04 — Cake · [`5cfa33d`](https://github.com/stupnd/Bridge/commit/5cfa33d73cf96f9e201ac3e16af835572eb25850) · pushed by @TheCakeOfTruth
+
+**Test bluetooth reception**
+
+Files changed (3):
+- `RaspPi/rasppi-test/main.py` (+7 / −4)
+- `RaspPi/rasppi-test/modules/bluetooth.py` (+1 / −1)
+- `RaspPi/rasppi-test/modules/tts.py` (+3 / −0)
+
+### 2026-10-09 11:12 — Cake · [`6056271`](https://github.com/stupnd/Bridge/commit/6056271c2fefeb1cb433582990e065be9cf36419) · pushed by @TheCakeOfTruth
+
+**Restructured Bluetooth module**
+
+Files changed (10):
+- `RaspPi/rasppi-test/main.py` (+31 / −0)
+- `RaspPi/rasppi-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/rasppi-test/modules/bluetooth.py` (+41 / −0)
+- `RaspPi/rasppi-test/modules/tts.py` (+47 / −0)
+- `RaspPi/rasppi-test/requirements.txt` (binary)
+- `RaspPi/tts-test/main.py` (+0 / −4)
+- `RaspPi/tts-test/modules/.gitignore` (+0 / −1)
+- `RaspPi/tts-test/modules/bluetooth.py` (+0 / −59)
+- `RaspPi/tts-test/modules/tts.py` (+0 / −47)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
 ### 2026-11-13 08:22 — Stuti Pandya · [`dc2e9a1`](https://github.com/stupnd/Bridge/commit/dc2e9a1404a4c2b1e89bf06b5c2d7227ec4ad780) · pushed by @stupnd
 
 **Merge pull request #9 from stupnd/feature/ui-redesign**
