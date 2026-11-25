@@ -2,6 +2,42 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-25 16:28 — Krisha Veera · [`f336326`](https://github.com/stupnd/Bridge/commit/f3363261d68b058ecc1f6d1a291081acd14b5875) · pushed by @KrishaVeera
+
+**Organize collected glove data into raw/ and processed/**
+
+- raw/: original Collect-page exports (removed two byte-identical "copy" files)
+- processed/: deduplicated sessions, per-recording summary, and tidy frames tables
+  (each export repeats all earlier samples; 47 unique recordings: I x10, J x19, Z x18)
+- README describing the files, current contents, and what to collect next
+
+Files changed (25):
+- `data_collected/README.md` (+54 / −0)
+- `data_collected/asl-calibration-2026-10-24T17-43-43-538Z.csv` (+0 / −2)
+- `data_collected/asl-calibration-2026-10-24T17-43-51-905Z copy.csv` (+0 / −2)
+- `data_collected/asl-calibration-2026-10-24T17-43-51-905Z.csv` (+0 / −2)
+- `data_collected/asl-calibration-2026-10-24T17-58-56-004Z.csv` (+0 / −2)
+- `data_collected/asl-calibration-2026-11-13T14-58-11-834Z.csv` (+0 / −3)
+- `data_collected/asl-frames-2026-10-24T17-43-43-538Z.csv` (+0 / −401)
+- `data_collected/asl-frames-2026-10-24T17-43-51-905Z copy.csv` (+0 / −401)
+- `data_collected/asl-frames-2026-10-24T17-43-51-905Z.csv` (+0 / −401)
+- `data_collected/asl-frames-2026-10-24T17-58-56-004Z.csv` (+0 / −2592)
+- `data_collected/asl-frames-2026-11-13T14-58-11-834Z.csv` (+0 / −4313)
+- `data_collected/asl-samples-2026-10-09T14-36-04-514Z.csv` (+0 / −25)
+- `data_collected/processed/frames.csv` (+4313 / −0)
+- `data_collected/processed/legacy_static_samples.csv` (+25 / −0)
+- `data_collected/processed/samples.csv` (+48 / −0)
+- `data_collected/processed/sessions.csv` (+3 / −0)
+- `data_collected/raw/asl-calibration-2026-10-24T17-43-43-538Z.csv` (+2 / −0)
+- `data_collected/raw/asl-calibration-2026-10-24T17-43-51-905Z.csv` (+2 / −0)
+- `data_collected/raw/asl-calibration-2026-10-24T17-58-56-004Z.csv` (+2 / −0)
+- `data_collected/raw/asl-calibration-2026-11-13T14-58-11-834Z.csv` (+3 / −0)
+- `data_collected/raw/asl-frames-2026-10-24T17-43-43-538Z.csv` (+401 / −0)
+- `data_collected/raw/asl-frames-2026-10-24T17-43-51-905Z.csv` (+401 / −0)
+- `data_collected/raw/asl-frames-2026-10-24T17-58-56-004Z.csv` (+2592 / −0)
+- `data_collected/raw/asl-frames-2026-11-13T14-58-11-834Z.csv` (+4313 / −0)
+- `data_collected/raw/asl-samples-2026-10-09T14-36-04-514Z.csv` (+25 / −0)
+
 ### 2026-11-25 15:49 — Stuti Pandya · [`6b74de0`](https://github.com/stupnd/Bridge/commit/6b74de021d00f118185483f4843e754dc52949ce) · pushed by @stupnd
 
 **Merge remote-tracking branch 'origin/main' into feature/ui-redesign**
