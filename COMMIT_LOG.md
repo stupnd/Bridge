@@ -2,6 +2,15 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-25 16:35 — Krisha Veera · [`0d02e0b`](https://github.com/stupnd/Bridge/commit/0d02e0b21dd04828ff4e7242e8b2b7bed8417d33) · pushed by @KrishaVeera
+
+**Add ML approach notes for the final report**
+
+Documents the collected data, the ML pipeline step by step, the models compared, and how they compare with the Collect-page kNN.
+
+Files changed (1):
+- `report documentation/ml-sign-model-approach.md` (+178 / −0)
+
 ### 2026-11-25 16:28 — Krisha Veera · [`f336326`](https://github.com/stupnd/Bridge/commit/f3363261d68b058ecc1f6d1a291081acd14b5875) · pushed by @KrishaVeera
 
 **Organize collected glove data into raw/ and processed/**
