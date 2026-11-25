@@ -2,6 +2,32 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-25 15:49 — Stuti Pandya · [`6b74de0`](https://github.com/stupnd/Bridge/commit/6b74de021d00f118185483f4843e754dc52949ce) · pushed by @stupnd
+
+**Merge remote-tracking branch 'origin/main' into feature/ui-redesign**
+
+Files changed (12):
+- `COMMIT_LOG.md` (+468 / −0)
+- `RaspPi/Raspberry Pi Setup/Instructions.docx` (binary)
+- `RaspPi/rasppi-test/main.py` (+34 / −0)
+- `RaspPi/rasppi-test/modules/.gitignore` (+1 / −0)
+- `RaspPi/rasppi-test/modules/bluetooth.py` (+41 / −0)
+- `RaspPi/rasppi-test/modules/tts.py` (+50 / −0)
+- `RaspPi/rasppi-test/requirements.txt` (binary)
+- `RaspPi/tts-test/main.py` (+0 / −4)
+- `RaspPi/tts-test/modules/.gitignore` (+0 / −1)
+- `RaspPi/tts-test/modules/bluetooth.py` (+0 / −59)
+- `RaspPi/tts-test/modules/tts.py` (+0 / −47)
+- `RaspPi/tts-test/requirements.txt` (binary)
+
+### 2026-11-13 10:41 — Stuti Pandya · [`53314e0`](https://github.com/stupnd/Bridge/commit/53314e09643d2a779a043f49ac7d27f90af372b5) · pushed by @stupnd
+
+**Add Nov 13 data collection session**
+
+Files changed (2):
+- `data_collected/asl-calibration-2026-11-13T14-58-11-834Z.csv` (+3 / −0)
+- `data_collected/asl-frames-2026-11-13T14-58-11-834Z.csv` (+4313 / −0)
+
 ### 2026-11-25 15:18 — William · [`d496bf8`](https://github.com/stupnd/Bridge/commit/d496bf8da8734924060c4347a36c228e584e7127) · pushed by @TheCakeOfTruth
 
 **Merge pull request #10 from stupnd/rasppi-bluetooth**
