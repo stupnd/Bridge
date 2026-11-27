@@ -2,6 +2,15 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-27 10:08 — Krisha Veera · [`e25e2fd`](https://github.com/stupnd/Bridge/commit/e25e2fd887de9cdf1f42bf009f09f370086e9043) · pushed by @KrishaVeera
+
+**Add report docs: Pi deployment, calibration problem, sign recognition timing**
+
+Files changed (3):
+- `report documentation/pi-calibration-problem.md` (+139 / −0)
+- `report documentation/pi-model-deployment.md` (+286 / −0)
+- `report documentation/sign-recognition-on-pi.md` (+159 / −0)
+
 ### 2026-11-27 09:44 — AidanBrin · [`a6e2a40`](https://github.com/stupnd/Bridge/commit/a6e2a40f25399981bb3195f4728e935f56d9a2b6) · pushed by @AidanBrin16
 
 **Body unit prototypes**
