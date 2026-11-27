@@ -1,0 +1,6 @@
+# Training machine only (laptop/desktop). The Pi needs just numpy + onnxruntime.
+numpy>=2.0
+pandas>=2.2
+scikit-learn==1.9.1
+skl2onnx==1.20.0
+onnxruntime>=1.23

@@ -1,0 +1,97 @@
+{
+  "model": "random_forest",
+  "trained_at": "2026-11-25T21:27:51+00:00",
+  "labels": [
+    "I",
+    "J",
+    "Z"
+  ],
+  "rest_label": "REST",
+  "feature_names": [
+    "bend_thumb_mean",
+    "bend_index_mean",
+    "bend_middle_mean",
+    "bend_ring_mean",
+    "bend_pinky_mean",
+    "bend_thumb_std",
+    "bend_index_std",
+    "bend_middle_std",
+    "bend_ring_std",
+    "bend_pinky_std",
+    "bend_thumb_min",
+    "bend_index_min",
+    "bend_middle_min",
+    "bend_ring_min",
+    "bend_pinky_min",
+    "bend_thumb_max",
+    "bend_index_max",
+    "bend_middle_max",
+    "bend_ring_max",
+    "bend_pinky_max",
+    "bend_range_max",
+    "gravity_x",
+    "gravity_y",
+    "gravity_z",
+    "gyro_rms",
+    "gyro_peak",
+    "gyro_x_rms",
+    "gyro_y_rms",
+    "gyro_z_rms",
+    "turn_x_deg",
+    "turn_y_deg",
+    "turn_z_deg",
+    "turn_abs_max_deg",
+    "acc_std",
+    "reversals"
+  ],
+  "frame_columns": [
+    "t_ms",
+    "raw_f1",
+    "raw_f2",
+    "raw_f3",
+    "raw_f4",
+    "raw_f5",
+    "ax",
+    "ay",
+    "az",
+    "gx",
+    "gy",
+    "gz"
+  ],
+  "window_ms": 2500,
+  "min_frames": 20,
+  "min_probability": 0.6,
+  "hands": [
+    "L"
+  ],
+  "training_data": {
+    "recordings": 47,
+    "windows": 423,
+    "participants": [
+      "2"
+    ],
+    "sessions": 2,
+    "per_label": {
+      "I": 10,
+      "J": 19,
+      "Z": 18
+    }
+  },
+  "scores": {
+    "logistic_regression": {
+      "cv_windows": 0.9976,
+      "cv_full": 1.0,
+      "cross_session": 0.6928
+    },
+    "random_forest": {
+      "cv_windows": 0.9787,
+      "cv_full": 0.9787,
+      "cross_session": 0.9706
+    },
+    "knn_k3": {
+      "cv_windows": 1.0,
+      "cv_full": 1.0,
+      "cross_session": 0.5654
+    }
+  }
+}
