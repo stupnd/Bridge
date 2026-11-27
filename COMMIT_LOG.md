@@ -2,6 +2,23 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-27 09:35 — Krisha Veera · [`8868e26`](https://github.com/stupnd/Bridge/commit/8868e26ed8a960a140268263a14b62f7631c4fb0) · pushed by @KrishaVeera
+
+**Run the sign model on the Pi (rasppi-test)**
+
+Copies features.py, sign_model.py and models/ from ml/ next to main.py and feeds
+each glove packet into SignRecognizer, printing recognized letters. Uses the
+default calibration (participant 2) for now; transmitting the letter stays
+commented out. sign_model.onnx is force-added past the *.onnx ignore rule.
+
+Files changed (6):
+- `RaspPi/rasppi-test/features.py` (+88 / −0)
+- `RaspPi/rasppi-test/main.py` (+15 / −6)
+- `RaspPi/rasppi-test/models/calibration.json` (+18 / −0)
+- `RaspPi/rasppi-test/models/model_meta.json` (+97 / −0)
+- `RaspPi/rasppi-test/models/sign_model.onnx` (binary)
+- `RaspPi/rasppi-test/sign_model.py` (+90 / −0)
+
 ### 2026-11-27 09:31 — William · [`d3a0fd7`](https://github.com/stupnd/Bridge/commit/d3a0fd712edb16f83ac4bc4f715f5d63013f523d) · pushed by @TheCakeOfTruth
 
 **Merge pull request #11 from stupnd/rasppi-bluetooth**
