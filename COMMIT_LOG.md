@@ -2,6 +2,26 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-27 09:31 — William · [`d3a0fd7`](https://github.com/stupnd/Bridge/commit/d3a0fd712edb16f83ac4bc4f715f5d63013f523d) · pushed by @TheCakeOfTruth
+
+**Merge pull request #11 from stupnd/rasppi-bluetooth**
+
+Update Bluetooth to add transmission
+
+Files changed (3):
+- `RaspPi/package-export.txt` (+13 / −4)
+- `RaspPi/rasppi-test/main.py` (+8 / −1)
+- `RaspPi/rasppi-test/modules/bluetooth.py` (+46 / −5)
+
+### 2026-11-27 09:29 — Cake · [`8453f34`](https://github.com/stupnd/Bridge/commit/8453f34f0b1a285178bfedbfabba5832d0bc8ff1) · pushed by @TheCakeOfTruth
+
+**Update Bluetooth to add transmission**
+
+Files changed (3):
+- `RaspPi/package-export.txt` (+13 / −4)
+- `RaspPi/rasppi-test/main.py` (+8 / −1)
+- `RaspPi/rasppi-test/modules/bluetooth.py` (+46 / −5)
+
 ### 2026-11-27 09:20 — Krisha Veera · [`25318a0`](https://github.com/stupnd/Bridge/commit/25318a01323510019735caa472f46202f216b8ef) · pushed by @KrishaVeera
 
 **Add sign recognition model (training scripts, ONNX model, Pi recognizer)**
