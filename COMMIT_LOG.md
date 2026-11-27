@@ -2,6 +2,19 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-27 09:44 — AidanBrin · [`a6e2a40`](https://github.com/stupnd/Bridge/commit/a6e2a40f25399981bb3195f4728e935f56d9a2b6) · pushed by @AidanBrin16
+
+**Body unit prototypes**
+
+First and second prototypes for body unit.
+Designs created on 30/10/2026 & 11/11/2026.
+
+Files changed (4):
+- `Body Unit/Belt Mount - Prototype 1.3mf` (binary)
+- `Body Unit/Belt Mount - Prototype 1.STL` (binary)
+- `Body Unit/Belt Mount - Prototype 2.SLDPRT` (binary)
+- `Body Unit/Belt Mount - Prototype 2.STL` (binary)
+
 ### 2026-11-27 09:35 — Krisha Veera · [`8868e26`](https://github.com/stupnd/Bridge/commit/8868e26ed8a960a140268263a14b62f7631c4fb0) · pushed by @KrishaVeera
 
 **Run the sign model on the Pi (rasppi-test)**
