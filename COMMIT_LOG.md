@@ -2,6 +2,27 @@
 
 Automatically updated by the `commit-log` GitHub Action on every push to `main`. Newest first.
 
+### 2026-11-27 09:20 — Krisha Veera · [`25318a0`](https://github.com/stupnd/Bridge/commit/25318a01323510019735caa472f46202f216b8ef) · pushed by @KrishaVeera
+
+**Add sign recognition model (training scripts, ONNX model, Pi recognizer)**
+
+Random forest trained on the glove recordings for I, J, Z (97.1% leave-one-session-out).
+sign_model.onnx is force-added past the *.onnx ignore rule so the Pi can use it
+without retraining. Not wired into the Pi's main.py yet.
+
+Files changed (11):
+- `ml/README.md` (+53 / −0)
+- `ml/features.py` (+88 / −0)
+- `ml/models/calibration.json` (+18 / −0)
+- `ml/models/model_meta.json` (+97 / −0)
+- `ml/models/sign_model.onnx` (binary)
+- `ml/prepare_data.py` (+92 / −0)
+- `ml/replay.py` (+75 / −0)
+- `ml/report.md` (+34 / −0)
+- `ml/requirements.txt` (+6 / −0)
+- `ml/sign_model.py` (+90 / −0)
+- `ml/train.py` (+246 / −0)
+
 ### 2026-11-25 16:35 — Krisha Veera · [`0d02e0b`](https://github.com/stupnd/Bridge/commit/0d02e0b21dd04828ff4e7242e8b2b7bed8417d33) · pushed by @KrishaVeera
 
 **Add ML approach notes for the final report**
